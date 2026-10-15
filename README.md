@@ -67,12 +67,14 @@ uv run --locked python scripts/download_model.py small --http-chunks
 ## 开发与验证
 
 ```bash
-uv run --locked pytest backend/tests -q
+uv run --locked python -m pytest backend/tests -q
 uv run --locked ruff check backend scripts
 uv run --locked ruff format --check backend scripts
 npm --prefix frontend test
 npm --prefix frontend run build
 ```
+
+请在仓库根目录使用 `python -m pytest` 启动测试，确保 `backend` 包能够被导入。
 
 当前本机后端 27 项测试、前端 3 项组件测试与生产构建已通过。CI 配置见 `.github/workflows/ci.yml`，远端是否通过以 GitHub Actions 实际结果为准。测试使用临时音频和模拟模型响应，不代表真实识别质量通过。
 
