@@ -6,4 +6,5 @@ export type Note = { id: string; transcript_id: string; provider: string; model:
 export type Job = { id: string; state: string; stage: string; kind: string; error: string | null; created_at: string; updated_at: string }
 export type Lecture = { id: string; title: string; duration: number; is_demo: boolean; active_transcript_id: string | null; created_at: string }
 export type Detail = Lecture & { transcript: Transcript | null; transcript_versions: Omit<Transcript, 'segments'>[]; notes: Note[]; jobs: Job[]; bookmarks: { id: string; position_ms: number; question: string }[] }
-export type Settings = { qwen_configured: boolean; qwen_model: string; prices_configured: boolean; budget: { budget_cny: number; committed_cny: number; remaining_cny: number; unknown_calls: number }; models: { name: string; ready: boolean }[] }
+export type NotesAPIConfig = { base_url: string; model: string; configured: boolean; key_configured: boolean; revision: string }
+export type Settings = { notes_api: NotesAPIConfig; models: { name: string; ready: boolean }[] }

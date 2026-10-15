@@ -19,6 +19,7 @@ from .exports import backup_json, note_markdown, transcript_srt
 from .media import EXTENSIONS, media_dir, probe
 from .migrate import migrate
 from .notes import budget_summary
+from .notes_api import APIInput, load_api_config, save_api_config
 from .schemas import (
     BookmarkInput,
     CourseInput,
@@ -89,6 +90,7 @@ def settings_info():
             "prices_configured": settings.input_price is not None
             and settings.output_price is not None,
             "budget": budget_summary(db),
+            "notes_api": load_api_config().public(),
             "models": [
                 {"name": name, **value, "ready": asr.model_ready(name)}
                 for name, value in asr.MODELS.items()
@@ -96,6 +98,18 @@ def settings_info():
             "max_file_mb": 500,
             "max_minutes": 90,
         }
+
+
+@app.put("/api/settings/notes-api")
+async def update_notes_api(request: Request):
+    try:
+        body = APIInput.model_validate(await request.json())
+    except ValueError:
+        # Validation errors may contain input values, including a supplied secret.
+        raise HTTPException(
+            400, "请检查接口 URL、模型和密钥格式；URL 不可含凭据或查询参数"
+        ) from None
+    return save_api_config(body).public()
 
 
 @app.get("/api/usage")
@@ -306,6 +320,12 @@ def start_notes(lecture_id: str, body: NoteInput):
             raise HTTPException(400, "转录不属于当前录音")
         if body.provider == "qwen" and not body.consent:
             raise HTTPException(400, "请先确认将此转录版本发送给云模型")
+        if body.provider == "api":
+            config = load_api_config()
+            if not config.configured:
+                raise HTTPException(400, "请先在设置中填写 AI 接口 URL、模型和密钥")
+            if not body.consent or body.api_revision != config.revision:
+                raise HTTPException(409, "请核对当前 AI 接口设置，确认向该接口发送转录文本")
     identifier = jobs.create_job(
         lecture_id, "notes", body.model_dump(exclude={"force"}), force=body.force
     )

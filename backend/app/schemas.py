@@ -71,8 +71,9 @@ class TranscribeInput(StrictModel):
 
 class NoteInput(StrictModel):
     transcript_id: str
-    provider: Literal["extractive", "qwen"] = "extractive"
+    provider: Literal["extractive", "qwen", "api"] = "extractive"
     consent: bool = False
+    api_revision: str = Field(default="", max_length=80)
     force: bool = False
 
 

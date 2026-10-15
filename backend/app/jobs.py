@@ -11,7 +11,7 @@ from . import asr
 from .config import get_settings
 from .db import Job, Lecture, Note, Transcript, Usage, new_id, now, session
 from .media import media_dir, normalize
-from .notes import NotesError, extractive_note, qwen_note
+from .notes import NotesError, api_note, extractive_note, qwen_note
 
 QUEUE = "classecho"
 
@@ -214,11 +214,18 @@ def execute_job(job_id):
                     raise ValueError("来源转录版本不存在")
                 segments = transcript.segments
             stage(job_id, "draft")
-            content = (
-                extractive_note(lecture.title, segments)
-                if parameters["provider"] == "extractive"
-                else qwen_note(job_id, lecture.title, segments)
-            )
+            if parameters["provider"] == "extractive":
+                content = extractive_note(lecture.title, segments)
+                note_model = "local-extractive-v1"
+            elif parameters["provider"] == "api":
+                content, note_model = api_note(
+                    lecture.title, segments, parameters.get("api_revision", "")
+                )
+            elif parameters["provider"] == "qwen":
+                content = qwen_note(job_id, lecture.title, segments)
+                note_model = get_settings().qwen_model
+            else:
+                raise NotesError("未知笔记方式")
             stage(job_id, "validate")
             with session() as db:
                 note = Note(
@@ -226,9 +233,7 @@ def execute_job(job_id):
                     lecture_id=lecture.id,
                     transcript_id=parameters["transcript_id"],
                     provider=parameters["provider"],
-                    model="local-extractive-v1"
-                    if parameters["provider"] == "extractive"
-                    else get_settings().qwen_model,
+                    model=note_model,
                     content=content,
                 )
                 db.add(note)
