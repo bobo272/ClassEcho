@@ -1,0 +1,51 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Frontend and build outputs
+node_modules/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+
+# Local application data, models and recordings
+/data/
+/uploads/
+/recordings/
+/models/
+.cache/
+/exports/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.mp3
+*.m4a
+*.wav
+*.mp4
+*.mov
+*.flac
+*.aac
+
+# Logs and operating system files
+logs/
+*.log
+.DS_Store
