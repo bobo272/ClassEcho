@@ -58,7 +58,7 @@ uv run --locked python scripts/download_model.py small --http-chunks
 ## 当前实现
 
 - 创建课程，导入 MP3、M4A、WAV、MP4；限制 500MB / 90 分钟并校验音轨。
-- 本地转录、片段时间戳、原始识别文本与独立修订版本。
+- 本地转录默认用 OpenCC 转为简体，保留模型原始识别文字、片段时间戳与独立修订版本；繁简转换不会纠正识别错词。
 - 本地逐段摘录、来源引用回听、独立用户笔记与版本冲突检查。
 - 持久后台任务、状态轮询、规范化检查点、失败重试与排队取消。
 - 疑问时间标记，Markdown、SRT 与 JSON 备份导出。
@@ -76,7 +76,7 @@ npm --prefix frontend run build
 
 请在仓库根目录使用 `python -m pytest` 启动测试，确保 `backend` 包能够被导入。
 
-当前本机后端 27 项测试、前端 3 项组件测试与生产构建已通过。CI 配置见 `.github/workflows/ci.yml`，远端是否通过以 GitHub Actions 实际结果为准。测试使用临时音频和模拟模型响应，不代表真实识别质量通过。
+当前本机后端 31 项测试、前端 3 项组件测试与生产构建已通过。CI 配置见 `.github/workflows/ci.yml`，远端是否通过以 GitHub Actions 实际结果为准。测试使用临时音频和模拟模型响应，不代表真实识别质量通过。
 
 开发前后端时，可分别运行 `uv run uvicorn backend.app.main:app --host 127.0.0.1 --port 8765` 与 `npm --prefix frontend run dev`；转录和笔记任务还需要本机 Redis 和 `uv run python -m backend.app.worker`。统一启动器与手动 API 不应同时占用 8765 端口。
 
