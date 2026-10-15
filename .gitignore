@@ -23,6 +23,9 @@ build/
 coverage/
 playwright-report/
 test-results/
+*.tsbuildinfo
+/.playwright-cli/
+/output/
 
 # Local application data, models and recordings
 /data/
