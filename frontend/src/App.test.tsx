@@ -151,6 +151,26 @@ it('点击笔记引用自动展开原文和播放器并定位播放时间', asyn
   expect(HTMLMediaElement.prototype.play).toHaveBeenCalledOnce()
 })
 
+it('引用回听在片段末尾暂停，手动拖动进度后解除该范围', async () => {
+  const { detail } = noteWorkspace()
+  mockNoteWorkspace(detail)
+  const view = render(<App />)
+  await screen.findByText('第一版正文')
+  const media = view.container.querySelector('audio')!
+  const citation = await screen.findByRole('button', { name: /00:00\s*↗/ })
+  fireEvent.click(citation)
+  media.currentTime = 1
+  fireEvent.timeUpdate(media)
+  expect(media.pause).toHaveBeenCalledOnce()
+  vi.mocked(media.pause).mockClear()
+  fireEvent.click(citation)
+  fireEvent.change(screen.getByRole('slider', { name: '播放进度' }), { target: { value: '10' } })
+  fireEvent.timeUpdate(media)
+  expect(media.currentTime).toBe(10)
+  expect(media.pause).not.toHaveBeenCalled()
+  expect(screen.getByRole('slider', { name: '播放进度' })).toHaveAttribute('aria-valuetext', '00:10，共 00:30')
+})
+
 it('收起课程列表后仍保留当前笔记和编辑内容', async () => {
   const { detail } = noteWorkspace()
   mockNoteWorkspace(detail)
