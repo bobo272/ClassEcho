@@ -59,6 +59,7 @@ uv run --locked python scripts/download_model.py small --http-chunks
 
 - 创建课程，导入 MP3、M4A、WAV、MP4、WebM；限制 500MB / 90 分钟并校验音轨。
 - 网页麦克风录音：开始、暂停／继续、计时、结束预览、下载与保存到课程；保存失败保留录音。支持 Chrome 常见的 WebM 和 Safari 常见的 MP4 编码路径，浏览器权限与真实设备仍需实测。
+- 麦克风实时转录采用 AudioWorklet 采集单声道 PCM16，约每 10 秒交给本机 RQ/MLX Whisper small 识别；文字是临时预览，支持暂停，不调用浏览器云端语音识别。识别落后时只更新最新窗口，完整录音独立保留；需要提前准备 small 模型。
 - 本地转录默认用 OpenCC 转为简体，保留模型原始识别文字、片段时间戳与独立修订版本；繁简转换不会纠正识别错词。
 - 重新整理明确创建新笔记版本，任务完成后自动展示新结果；旧笔记保留，有未保存修改时先保护草稿。
 - 本地逐段摘录、来源引用回听；笔记正文可逐条修订、查看原始内容和恢复原文，个人补充独立保存，保存时检查版本冲突。
@@ -80,7 +81,7 @@ npm --prefix frontend run build
 
 请在仓库根目录使用 `python -m pytest` 启动测试，确保 `backend` 包能够被导入。
 
-当前本机后端 58 项测试、前端 25 项组件测试与生产构建已通过。CI 配置见 `.github/workflows/ci.yml`，远端是否通过以 GitHub Actions 实际结果为准。测试使用临时音频和模拟模型响应，不代表真实识别质量通过。
+当前本机后端 63 项测试、前端 30 项前端测试与生产构建已通过。CI 配置见 `.github/workflows/ci.yml`，远端是否通过以 GitHub Actions 实际结果为准。测试使用临时音频和模拟模型响应，不代表真实识别质量通过。
 
 开发前后端时，可分别运行 `uv run uvicorn backend.app.main:app --host 127.0.0.1 --port 8765` 与 `npm --prefix frontend run dev`；转录和笔记任务还需要本机 Redis 和 `uv run python -m backend.app.worker`。统一启动器与手动 API 不应同时占用 8765 端口。
 
@@ -108,3 +109,13 @@ npm --prefix frontend run build
 - Safari、另一台 Apple Silicon Mac 的安装与使用，以及真实试用反馈。
 
 这些事项完成前，当前版本不作为正式公开试用版验收。小步开发与 GitHub 同步流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。项目原创代码采用 MIT 许可；模型、FFmpeg 等外部组件的许可分别适用。
+
+## 麦克风实时预览
+
+在课程页右上角点击「录音」。允许浏览器麦克风权限后开始录音；勾选本地实时转录时，约每 10 秒显示一批文字，实际延迟取决于本机识别速度和队列。预览不是逐字流式识别，短片段可能切断句子，不能直接当作最终笔记来源。模型未就绪或预览失败时仍可保存完整录音。
+
+实时分片仅发送到本机 `/api/live-transcriptions`，worker 与完整转录共享推理锁；最多两个待处理预览，任务过期会释放限额。临时音频在推理后删除，预览缓存最多保留约一小时（下次请求时清理）。接口校验 WAV 格式、分片大小、采样率与时间范围。浏览器退出前应先保存或下载录音，当前不支持刷新恢复尚未保存的录音。
+
+2026-10-16 对项目自写示例的 10 秒音频，通过实际 Redis/RQ worker 和 MLX Whisper small 完成一次识别，包含排队耗时约 3.05 秒，返回 1 个片段、45 字；此结果不是课堂准确率评测或长时间麦克风实测。
+
+采音依据：[AudioWorkletNode](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorkletNode)、[getUserMedia](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)。

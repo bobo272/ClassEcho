@@ -258,7 +258,7 @@ export default function App() {
         <footer id="classecho-player" className="player" aria-label="录音播放器" hidden={!showPlayer}><div className="player-title"><span><Headphones size={19} /></span><div><strong>{detail.title}</strong><small>原始录音 · {timeLabel(position)} / {timeLabel(detail.duration * 1000)}</small></div></div><audio key={lectureId} ref={audio} controls preload="metadata" src={`/api/lectures/${lectureId}/media`} onTimeUpdate={updateTime} onSeeking={() => { if (audio.current && stopAt.current !== null && audio.current.currentTime > stopAt.current) stopAt.current = null }} /><label className="speed-select">倍速<select aria-label="播放速度" defaultValue="1" onChange={event => { if (audio.current) audio.current.playbackRate = Number(event.target.value) }}><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label><button className="icon-button" aria-label="关闭播放器" onClick={closePlayer}><X size={17} /></button></footer>
       </>}
     </main>
-    {showRecording && <MicrophoneRecorder courseName={currentCourse?.name ?? '当前课程'} onClose={() => setShowRecording(false)} onSave={async file => {
+    {showRecording && <MicrophoneRecorder courseName={currentCourse?.name ?? '当前课程'} liveReady={!!settings?.models.some(item => item.name === 'small' && item.ready)} onClose={() => setShowRecording(false)} onSave={async file => {
       const form = new FormData(); form.append('file', file)
       const lecture = await api<Lecture>(`/courses/${courseId}/lectures`, { method: 'POST', body: form })
       setLectures(previous => [lecture, ...previous]); setLectureId(lecture.id); setShowRecording(false)

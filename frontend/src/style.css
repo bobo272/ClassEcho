@@ -21,6 +21,14 @@
 .recording-review { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 20px; }
 .recording-review audio { width: 100%; height: 40px; }
 .recording-error { color: #a45b5b; font-size: 12px; line-height: 1.8; margin-top: 16px; }
+.recording-option { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; font-size: 12px; }
+.recording-option input { margin-top: 4px; }
+.live-preview { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px; }
+.live-preview h3 { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+.live-preview > p { font-size: 12px; }
+.live-preview-lines { max-height: 220px; overflow-y: auto; }
+.live-preview-lines > p { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; margin-top: 12px; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.live-preview-lines time { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 @media (max-width: 480px) { .recording-entry span { display: none; } }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }

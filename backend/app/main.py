@@ -16,6 +16,7 @@ from . import asr, jobs
 from .config import ROOT, get_settings
 from .db import Bookmark, Course, Job, Lecture, Note, Transcript, Usage, new_id, row_dict, session
 from .exports import backup_json, note_markdown, transcript_srt
+from .live_asr import router as live_router
 from .media import EXTENSIONS, media_dir, normalize, probe
 from .migrate import migrate
 from .notes import budget_summary
@@ -38,6 +39,7 @@ async def lifespan(app):
 
 app = FastAPI(title="ClassEcho", version="0.1.0", lifespan=lifespan)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
+app.include_router(live_router)
 
 
 @app.middleware("http")
