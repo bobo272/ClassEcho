@@ -10,6 +10,18 @@
   --muted: #777b86;
   --accent: #5365c4;
 }
+.recording-context, .recording-help { font-size: 12px; }
+.recording-title { display: block; font-size: 12px; margin-top: 20px; }
+.recording-title input { display: block; width: 100%; margin-top: 8px; font-size: 14px; }
+.recording-status { display: flex; align-items: center; gap: 12px; margin: 24px 0 12px; }
+.recording-status strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.recording-status span { color: var(--muted); font-size: 12px; }
+.recording-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.recording-actions a { display: inline-flex; align-items: center; gap: 8px; }
+.recording-review { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 20px; }
+.recording-review audio { width: 100%; height: 40px; }
+.recording-error { color: #a45b5b; font-size: 12px; line-height: 1.8; margin-top: 16px; }
+@media (max-width: 480px) { .recording-entry span { display: none; } }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; }

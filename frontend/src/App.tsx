@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AudioLines, ArrowDownToLine, BookOpen, Check, ChevronDown, CircleHelp, Clock3, FileText, Headphones, LoaderCircle, PanelLeft, PanelRight, Plus, RotateCcw, Settings2, SlidersHorizontal, Sparkles, Trash2, X } from 'lucide-react'
+import { AudioLines, ArrowDownToLine, BookOpen, Check, ChevronDown, CircleHelp, Clock3, FileText, Headphones, LoaderCircle, Mic, PanelLeft, PanelRight, Plus, RotateCcw, Settings2, SlidersHorizontal, Sparkles, Trash2, X } from 'lucide-react'
 import { api, noteIsStale, timeLabel } from './api'
 import type { Course, Detail, Job, Lecture, Note, Segment, Settings, Transcript } from './types'
 import TranscriptPane from './TranscriptPane'
@@ -9,6 +9,7 @@ import { readWorkspace, saveWorkspace } from './workspace'
 import WorkspaceSidebar from './WorkspaceSidebar'
 import LibraryOverview from './LibraryOverview'
 import Dialog from './Dialog'
+import MicrophoneRecorder from './MicrophoneRecorder'
 
 const stageNames: Record<string, string> = { queued: '等待处理', normalize: '规范化音频', download: '检查或下载模型（首次较慢）', transcribe: '本地转录中', draft: '整理笔记中', validate: '检查来源引用', complete: '已完成' }
 
@@ -34,6 +35,7 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showCourse, setShowCourse] = useState(false)
+  const [showRecording, setShowRecording] = useState(false)
   const [courseName, setCourseName] = useState('')
   const [model, setModel] = useState('small')
   const [provider, setProvider] = useState('extractive')
@@ -149,13 +151,13 @@ export default function App() {
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || showSettings || showCourse) return
+      if (event.key !== 'Escape' || showSettings || showCourse || showRecording) return
       if (showTranscript) setShowTranscript(false)
       else if (sidebarOpen && window.innerWidth < 1000) setSidebarOpen(false)
     }
     document.addEventListener('keydown', keydown)
     return () => document.removeEventListener('keydown', keydown)
-  }, [showSettings, showCourse, showTranscript, sidebarOpen])
+  }, [showSettings, showCourse, showRecording, showTranscript, sidebarOpen])
 
   async function createCourse(event: React.FormEvent) {
     event.preventDefault()
@@ -230,7 +232,7 @@ export default function App() {
   return <div className={`app-shell ${sidebarOpen ? 'with-sidebar' : ''} ${showTranscript ? 'with-transcript' : ''} ${showPlayer ? 'with-player' : ''}`}>
     {sidebarOpen && <><div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} /><WorkspaceSidebar courses={courses} courseId={courseId} lectures={lectures} lectureId={lectureId} onHome={() => navigate(() => setLectureId(''))} onCourse={id => navigate(() => { setCourseId(id); if (window.innerWidth < 1000) setSidebarOpen(false) })} onLecture={chooseLecture} onNewCourse={() => setShowCourse(true)} onClose={() => setSidebarOpen(false)} /></>}
     <main className="main">
-      <header className="topbar"><div className="topbar-start"><button className="icon-button" aria-label={sidebarOpen ? '收起课程列表' : '展开课程列表'} aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(!sidebarOpen)}><PanelLeft size={18} /></button><div className="breadcrumb"><BookOpen size={14} /><button onClick={() => navigate(() => setLectureId(''))}>{currentCourse?.name ?? '我的笔记'}</button>{detail && <><span>/</span><strong>{detail.title}</strong></>}</div></div><div className="topbar-actions"><button className="button" disabled={busy} onClick={() => courseId ? uploadInput.current?.click() : setShowCourse(true)}><Plus size={15} /><span>导入录音</span></button><button className="icon-button" aria-label="设置" title="设置" onClick={openSettings}><Settings2 size={18} /></button></div><input ref={uploadInput} type="file" accept=".mp3,.m4a,.wav,.mp4" hidden onChange={event => { void upload(event.target.files?.[0]); event.target.value = '' }} /></header>
+      <header className="topbar"><div className="topbar-start"><button className="icon-button" aria-label={sidebarOpen ? '收起课程列表' : '展开课程列表'} aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(!sidebarOpen)}><PanelLeft size={18} /></button><div className="breadcrumb"><BookOpen size={14} /><button onClick={() => navigate(() => setLectureId(''))}>{currentCourse?.name ?? '我的笔记'}</button>{detail && <><span>/</span><strong>{detail.title}</strong></>}</div></div><div className="topbar-actions"><button className="button recording-entry" disabled={busy} aria-label="麦克风录音" onClick={() => navigate(() => courseId ? setShowRecording(true) : setShowCourse(true))}><Mic size={15} /><span>录音</span></button><button className="button" disabled={busy} onClick={() => courseId ? uploadInput.current?.click() : setShowCourse(true)}><Plus size={15} /><span>导入录音</span></button><button className="icon-button" aria-label="设置" title="设置" onClick={openSettings}><Settings2 size={18} /></button></div><input ref={uploadInput} type="file" accept=".mp3,.m4a,.wav,.mp4,.webm" hidden onChange={event => { void upload(event.target.files?.[0]); event.target.value = '' }} /></header>
       {(error || success) && <div role={error ? 'alert' : 'status'} className={`notice ${error ? 'error' : ''}`}><span>{error || success}</span><button aria-label="关闭提示" onClick={() => { setError(''); setSuccess('') }}><X size={16} /></button></div>}
       {!detail ? <LibraryOverview courseName={currentCourse?.name ?? '我的笔记'} lectures={lectures} busy={busy} onOpen={chooseLecture} onImport={() => courseId ? uploadInput.current?.click() : setShowCourse(true)} onDemo={() => void run(openDemo)} onDrop={file => void upload(file)} /> : <>
         <div className="lecture-header"><div className="document-label"><FileText size={15} />课程笔记</div><div className="lecture-title-row"><h1>{detail.title}</h1><button className="icon-button danger" aria-label="删除录音" title="删除录音" disabled={busy || !!activeJob} onClick={() => void run(removeLecture)}><Trash2 size={16} /></button></div><div className="metadata"><span><Clock3 size={13} />{timeLabel(detail.duration * 1000)}</span><span>{detail.is_demo ? '预生成示例' : '本地录音'}</span><span>{detail.notes.length} 个笔记版本</span></div>
@@ -256,6 +258,11 @@ export default function App() {
         <footer id="classecho-player" className="player" aria-label="录音播放器" hidden={!showPlayer}><div className="player-title"><span><Headphones size={19} /></span><div><strong>{detail.title}</strong><small>原始录音 · {timeLabel(position)} / {timeLabel(detail.duration * 1000)}</small></div></div><audio key={lectureId} ref={audio} controls preload="metadata" src={`/api/lectures/${lectureId}/media`} onTimeUpdate={updateTime} onSeeking={() => { if (audio.current && stopAt.current !== null && audio.current.currentTime > stopAt.current) stopAt.current = null }} /><label className="speed-select">倍速<select aria-label="播放速度" defaultValue="1" onChange={event => { if (audio.current) audio.current.playbackRate = Number(event.target.value) }}><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label><button className="icon-button" aria-label="关闭播放器" onClick={closePlayer}><X size={17} /></button></footer>
       </>}
     </main>
+    {showRecording && <MicrophoneRecorder courseName={currentCourse?.name ?? '当前课程'} onClose={() => setShowRecording(false)} onSave={async file => {
+      const form = new FormData(); form.append('file', file)
+      const lecture = await api<Lecture>(`/courses/${courseId}/lectures`, { method: 'POST', body: form })
+      setLectures(previous => [lecture, ...previous]); setLectureId(lecture.id); setShowRecording(false)
+    }} />}
     {showCourse && <Dialog title="新建课程" closeLabel="关闭新建课程" onClose={() => setShowCourse(false)}><form className="course-form" onSubmit={createCourse}><p>同一门课程的录音与笔记保存在一起。</p><label>课程名称<input placeholder="例如：数据库原理" value={courseName} onChange={event => setCourseName(event.target.value)} maxLength={120} required /></label><button className="button primary" disabled={busy || !courseName.trim()}>创建课程</button></form></Dialog>}
     {showSettings && <Dialog title="设置" closeLabel="关闭设置" className="settings-modal" onClose={() => setShowSettings(false)}><div className="setting-block"><h3>本地转录</h3>{settings?.models.map(item => <p key={item.name}>{item.name}<span className="tag">{item.ready ? '模型已就绪' : '首次转录时下载'}</span></p>)}</div>{settings?.notes_api && <APISettings config={settings.notes_api} onSaved={config => { setSettings(previous => previous ? { ...previous, notes_api: config } : previous); setConsent(false) }} />}</Dialog>}
     {busy && <div className="working"><LoaderCircle className="spin" size={16} />正在处理…</div>}

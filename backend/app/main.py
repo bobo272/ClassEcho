@@ -16,7 +16,7 @@ from . import asr, jobs
 from .config import ROOT, get_settings
 from .db import Bookmark, Course, Job, Lecture, Note, Transcript, Usage, new_id, row_dict, session
 from .exports import backup_json, note_markdown, transcript_srt
-from .media import EXTENSIONS, media_dir, probe
+from .media import EXTENSIONS, media_dir, normalize, probe
 from .migrate import migrate
 from .notes import budget_summary
 from .notes_api import APIInput, load_api_config, save_api_config
@@ -170,7 +170,7 @@ async def import_lecture(course_id: str, file: Annotated[UploadFile, File()]):
     filename = Path(file.filename or "录音").name
     suffix = Path(filename).suffix.lower()
     if suffix not in EXTENSIONS:
-        raise HTTPException(400, "仅支持 MP3、M4A、WAV 和 MP4")
+        raise HTTPException(400, "仅支持 MP3、M4A、WAV、MP4 和 WebM")
     identifier = new_id()
     directory = media_dir(identifier)
     directory.mkdir(parents=True)
@@ -184,7 +184,11 @@ async def import_lecture(course_id: str, file: Annotated[UploadFile, File()]):
                     raise HTTPException(413, "文件超过 500MB")
                 digest.update(chunk)
                 output.write(chunk)
-        duration = await run_in_threadpool(probe, target)
+        # MediaRecorder WebM often has no duration header; decode before measuring it.
+        if suffix == ".webm":
+            duration = await run_in_threadpool(normalize, target, directory / "normalized.wav")
+        else:
+            duration = await run_in_threadpool(probe, target)
         with session() as db:
             require(db, Course, course_id)
             lecture = Lecture(
