@@ -61,6 +61,7 @@ uv run --locked python scripts/download_model.py small --http-chunks
 - 本地转录默认用 OpenCC 转为简体，保留模型原始识别文字、片段时间戳与独立修订版本；繁简转换不会纠正识别错词。
 - 重新整理明确创建新笔记版本，任务完成后自动展示新结果；旧笔记保留，有未保存修改时先保护草稿。
 - 本地逐段摘录、来源引用回听；笔记正文可逐条修订、查看原始内容和恢复原文，个人补充独立保存，保存时检查版本冲突。
+- 文档工作区适配窄窗口；设置和新建课程弹窗支持键盘聚焦、Tab 限制与 Escape 关闭，关闭原文面板保留未保存修订。
 - 刷新页面后恢复课程与录音选择，重新查询持久任务；浏览器仅保存课程、录音 ID，不保存课堂文本或密钥。
 - 持久后台任务、状态轮询、规范化检查点、失败重试与排队取消；AI 整理支持分块进度与检查点，手动重试复用已完成块。
 - 疑问时间标记，Markdown、SRT 与 JSON 备份导出。
@@ -78,7 +79,7 @@ npm --prefix frontend run build
 
 请在仓库根目录使用 `python -m pytest` 启动测试，确保 `backend` 包能够被导入。
 
-当前本机后端 57 项测试、前端 17 项组件测试与生产构建已通过。CI 配置见 `.github/workflows/ci.yml`，远端是否通过以 GitHub Actions 实际结果为准。测试使用临时音频和模拟模型响应，不代表真实识别质量通过。
+当前本机后端 57 项测试、前端 20 项组件测试与生产构建已通过。CI 配置见 `.github/workflows/ci.yml`，远端是否通过以 GitHub Actions 实际结果为准。测试使用临时音频和模拟模型响应，不代表真实识别质量通过。
 
 开发前后端时，可分别运行 `uv run uvicorn backend.app.main:app --host 127.0.0.1 --port 8765` 与 `npm --prefix frontend run dev`；转录和笔记任务还需要本机 Redis 和 `uv run python -m backend.app.worker`。统一启动器与手动 API 不应同时占用 8765 端口。
 

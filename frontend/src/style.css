@@ -106,11 +106,11 @@ select { font-size: 12px; padding: 7px 10px; }
 .lecture-title-row h1 { font-size: 30px; line-height: 1.4; font-weight: 650; letter-spacing: -.8px; overflow-wrap: anywhere; }
 .lecture-title-row > .icon-button { opacity: .5; margin-top: 3px; }
 .lecture-title-row:hover > .icon-button, .lecture-title-row > .icon-button:focus-visible { opacity: 1; }
-.metadata { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; font-size: 11px; color: #9297a2; margin-top: 14px; }
+.metadata { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; font-size: 12px; color: #7b8392; margin-top: 14px; }
 .metadata > span { display: inline-flex; align-items: center; gap: 5px; }
 .document-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 24px 0 20px; margin-top: 5px; border-bottom: 1px solid var(--line); }
 .document-actions > div { display: flex; gap: 6px; }
-.document-actions .button { border-color: transparent; color: #7b818e; background: none; padding: 5px 7px; font-size: 11px; }
+.document-actions .button { border-color: transparent; color: #6e7787; background: none; padding: 5px 7px; font-size: 12px; }
 .document-actions .button:hover { background: #f5f5f8; color: #444c65; }
 .document-actions .button.selected { background: #f0f2fa; color: #5263a7; }
 .work-toolbar { display: grid; gap: 15px; padding: 18px; margin-top: 18px; background: #f8f8fa; border: 1px solid #ececf1; border-radius: 7px; }
@@ -135,7 +135,7 @@ select { font-size: 12px; padding: 7px 10px; }
 .note-version { position: relative; display: inline-flex; align-items: center; max-width: 100%; margin-top: 18px; }
 .note-version select { appearance: none; background: #fff; border-color: #e9eaf0; border-radius: 5px; font-size: 11px; color: #8a909e; padding: 5px 28px 5px 9px; }
 .note-version > svg { position: absolute; right: 8px; color: #afb4bf; pointer-events: none; }
-.note-kind { display: flex; align-items: center; gap: 6px; margin-top: 14px; font-size: 10px; color: #a2a6b0; }
+.note-kind { display: flex; align-items: center; gap: 6px; margin-top: 14px; font-size: 11px; color: #7e8795; }
 .status-dot { width: 4px; height: 4px; border-radius: 50%; background: #9b9fab; }
 .stale-warning { margin-top: 18px; padding: 11px 14px; border-left: 2px solid #d8c49b; background: #fbf8f2; font-size: 12px; color: #927e58; line-height: 1.8; }
 .note-content section { margin-top: 36px; }
@@ -150,7 +150,7 @@ select { font-size: 12px; padding: 7px 10px; }
 .note-item details { margin: 9px 0; padding-left: 10px; border-left: 2px solid #eceef4; font-size: 11px; color: #a2a7b3; }
 .note-item details p { color: #969daa; font-size: 12px; padding: 7px 0; }
 .citations { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
-.citations button { gap: 5px; font-size: 10px; padding: 3px 7px; border: 1px solid #e9ebf1; border-radius: 4px; background: #fafafe; color: #8a94ae; min-height: 25px; font-variant-numeric: tabular-nums; }
+.citations button { gap: 5px; font-size: 11px; padding: 3px 7px; border: 1px solid #e9ebf1; border-radius: 4px; background: #fafafe; color: #677a9e; min-height: 25px; font-variant-numeric: tabular-nums; }
 .citations button:hover { background: #f0f2fb; color: #4d609e; }
 .citations button span { color: #b2b8c9; }
 .note-edit-bar, .edit-bar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin-top: 18px; font-size: 11px; background: #f1f3fc; border-radius: 5px; color: #6373ac; }
@@ -182,7 +182,7 @@ select { font-size: 12px; padding: 7px 10px; }
 .segment-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
 .segment-meta button { font-size: 10px; color: #9aa5bc; padding: 2px; font-variant-numeric: tabular-nums; }
 .segment-meta button:last-child { color: #b0b6c2; }
-.segment p { font-size: 13px; line-height: 1.9; color: #828b9b; white-space: pre-wrap; overflow-wrap: anywhere; }
+.segment p { font-size: 14px; line-height: 1.9; color: #6f798b; white-space: pre-wrap; overflow-wrap: anywhere; }
 .segment textarea { width: 100%; font-size: 13px; line-height: 1.8; min-height: 110px; padding: 9px; }
 .segment details { margin-top: 9px; font-size: 10px; color: #a5adbb; }
 .segment details p { font-size: 11px; padding-top: 8px; }
@@ -209,14 +209,10 @@ select { font-size: 12px; padding: 7px 10px; }
 .job-status button { font-size: 11px; margin-left: auto; }
 .job-status.failed { background: #fff9f6; color: #a9856d; border-color: #eee0d7; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 100; background: #252a3540; display: flex; align-items: center; justify-content: center; padding: 24px; }
-.modal { width: 480px; max-width: 100%; max-height: 90vh; overflow-y: auto; padding: 28px; background: #fff; border: 1px solid #e3e5eb; border-radius: 10px; box-shadow: 0 15px 60px #222a3b24; }
-.modal-title { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 20px; }
-.modal-title h2 { font-size: 20px; font-weight: 600; }
+.modal { width: 480px; max-width: 100%; max-height: 90vh; overflow-y: auto; padding: 0; background: #fff; border: 1px solid #e3e5eb; border-radius: 10px; box-shadow: 0 15px 60px #222a3b24; }
+.modal-title { position: sticky; top: 0; z-index: 1; background: #fff; border-bottom: 1px solid var(--line); padding: 19px 24px; display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 0; }
+.modal-title h2 { font-size: 18px; font-weight: 600; }
 .modal-title button { color: #a0a7b5; padding: 4px; }
-.modal > p { font-size: 12px; color: #959dab; margin-bottom: 22px; }
-.modal > label { font-size: 12px; display: block; }
-.modal > label input { display: block; width: 100%; margin: 8px 0 22px; font-size: 14px; }
-.modal > .button { width: 100%; }
 .setting-block { padding-top: 22px; margin-top: 24px; border-top: 1px solid var(--line); }
 .setting-block h3 { font-size: 13px; font-weight: 550; margin-bottom: 13px; }
 .setting-block p { margin-top: 8px; font-size: 12px; }
@@ -254,18 +250,19 @@ select { font-size: 12px; padding: 7px 10px; }
   .lecture-header { padding-top: 32px; }
   .lecture-title-row h1 { font-size: 26px; }
   .document-actions { gap: 0; padding-top: 22px; }
-  .document-actions .button { font-size: 10px; gap: 5px; padding: 5px; }
+  .document-actions .button { font-size: 11px; gap: 5px; padding: 5px; }
   .document-actions > div { gap: 0; }
   .notes-pane { padding-top: 25px; }
   .note-content h3 { font-size: 18px; }
-  .note-item p { font-size: 14px; line-height: 1.95; }
+  .note-item p { font-size: 15px; line-height: 1.95; }
   .pane-heading { gap: 8px; }
   .pane-heading h2 { font-size: 13px; }
   .pane-heading > div:first-child { gap: 8px; }
   .export-links { gap: 9px; font-size: 10px; }
   .transcript-pane { width: 100%; }
   .player { padding: 12px; gap: 8px; min-height: 75px; }
-  .player .speed-select { display: none; }
+  .player .speed-select { display: flex; font-size: 0; gap: 0; }
+  .player .speed-select select { font-size: 11px; min-width: 42px; }
   .with-player .transcript-pane { bottom: 75px; }
   .library-overview { padding: 35px 24px; }
   .library-heading h1 { font-size: 26px; }
@@ -278,8 +275,31 @@ select { font-size: 12px; padding: 7px 10px; }
   .job-status { flex-wrap: wrap; }
   .job-status small { width: 100%; margin-left: 24px; }
   .modal-backdrop { padding: 15px; }
-  .modal { padding: 24px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; }
+}
+
+.dialog-content { padding: 22px 24px 26px; }
+.dialog-content > .setting-block:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.course-form > p { font-size: 13px; color: #808998; margin-bottom: 24px; }
+.course-form > label { display: block; font-size: 12px; color: #758092; }
+.course-form input { display: block; width: 100%; margin: 9px 0 24px; font-size: 14px; }
+.course-form > .button { width: 100%; }
+.api-settings small, .muted { color: #828c9d; }
+@media (max-width: 760px) {
+  .dialog-content { padding-left: 20px; padding-right: 20px; }
+  .modal-title { padding-left: 20px; padding-right: 20px; }
+}
+@media (max-width: 480px) {
+  .lecture-header, .notes-pane, .work-toolbar, .cloud-consent, .job-status, .notice { width: calc(100% - 36px); }
+  .lecture-title-row h1 { font-size: 24px; }
+  .metadata { font-size: 11px; gap: 12px; }
+  .document-actions .button { gap: 4px; font-size: 10px; }
+  .document-actions .button svg { width: 13px; height: 13px; }
+  .document-actions > div { gap: 2px; }
+  .pane-heading > div:first-child { gap: 5px; }
+  .export-links { gap: 7px; }
+  .export-links svg { display: none; }
+  .save-state { font-size: 9px; }
 }
