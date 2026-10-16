@@ -33,6 +33,7 @@ export default function App() {
   const [dirty, setDirty] = useState<Record<string, string>>({})
   const dirtyVersion = useRef<string | null>(null)
   const [noteId, setNoteId] = useState('')
+  const pendingNoteJob = useRef<string | null>(null)
   const [userText, setUserText] = useState('')
   const [noteDirty, setNoteDirty] = useState(false)
   const [noteEdits, setNoteEdits] = useState<Record<string, string>>({})
@@ -46,6 +47,7 @@ export default function App() {
   const stopAt = useRef<number | null>(null)
   const uploadInput = useRef<HTMLInputElement>(null)
   const selectedNote = detail?.notes.find(note => note.id === noteId) ?? detail?.notes[0]
+  const hasCurrentNote = detail?.notes.some(note => note.transcript_id === detail.transcript?.id && note.provider === provider) ?? false
   const currentCourse = courses.find(course => course.id === courseId)
   const activeJob = detail?.jobs.find(job => ['queued', 'running'].includes(job.state))
   const visibleTranscript = showNoteSource && source ? source : detail?.transcript
@@ -88,6 +90,7 @@ export default function App() {
   }, [courseId, lectureId, lectures])
   useEffect(() => {
     let active = true
+    pendingNoteJob.current = null
     setDetail(null); setDirty({}); setNoteDirty(false); setNoteEdits({}); setNoteId(''); setPosition(0); setSource(null); setShowNoteSource(false)
     if (lectureId) api<Detail>(`/lectures/${lectureId}`).then(value => { if (active) setDetail(value) }).catch(error => { if (active) setError(error.message) })
     return () => { active = false }
@@ -106,6 +109,15 @@ export default function App() {
   useEffect(() => {
     if (!noteId && detail?.notes[0]) setNoteId(detail.notes[0].id)
   }, [noteId, detail?.notes])
+  useEffect(() => {
+    if (!detail || detail.id !== lectureId) return
+    const running = detail.jobs.find(job => job.kind === 'notes' && ['queued', 'running'].includes(job.state))
+    if (!pendingNoteJob.current && running) pendingNoteJob.current = running.id
+    const finished = detail.jobs.find(job => job.id === pendingNoteJob.current)
+    if (finished?.state === 'succeeded' && finished.result_id && !noteDirty && !bodyDirty && detail.notes.some(note => note.id === finished.result_id)) {
+      setNoteId(finished.result_id); pendingNoteJob.current = null
+    } else if (finished && ['failed', 'cancelled'].includes(finished.state)) pendingNoteJob.current = null
+  }, [detail, lectureId, noteDirty, bodyDirty])
   useEffect(() => {
     if (!noteDirty && !bodyDirty) {
       setUserText(selectedNote?.user_markdown ?? '')
@@ -142,7 +154,8 @@ export default function App() {
   }
   async function startNotes() {
     if (!detail?.transcript) return
-    await api(`/lectures/${lectureId}/notes`, { method: 'POST', body: JSON.stringify({ transcript_id: detail.transcript.id, provider, consent, api_revision: provider === 'api' ? settings?.notes_api.revision : '' }) })
+    const job = await api<Job>(`/lectures/${lectureId}/notes`, { method: 'POST', body: JSON.stringify({ transcript_id: detail.transcript.id, provider, consent, force: hasCurrentNote, api_revision: provider === 'api' ? settings?.notes_api.revision : '' }) })
+    pendingNoteJob.current = job.id
     await refreshDetail()
   }
   function seek(segment: Segment) {
@@ -199,7 +212,8 @@ export default function App() {
         <div className="feature-strip"><div><span>01</span><strong>本地转录</strong><p>原始音频保存在你的电脑</p></div><div><span>02</span><strong>核对再整理</strong><p>先修正术语，再组织笔记</p></div><div><span>03</span><strong>每条都能回听</strong><p>从笔记找到对应的课堂原文</p></div></div>
       </div> : <>
         <div className="lecture-header"><button className="back-button" onClick={() => navigate(() => setLectureId(''))}><ArrowLeft size={14} />课程概览</button><div className="lecture-title-row"><div><span className="eyebrow">LECTURE WORKSPACE</span><h1>{detail.title}</h1><div className="metadata"><span><Clock3 size={13} />{timeLabel(detail.duration * 1000)}</span><span><ShieldCheck size={13} />本地保存</span>{detail.is_demo && <span className="tag">预生成示例</span>}</div></div><button className="icon-button danger" aria-label="删除录音" disabled={busy || !!activeJob} onClick={() => void run(removeLecture)}><Trash2 size={17} /></button></div></div>
-        <div className="work-toolbar"><div><select aria-label="转录模型" value={model} onChange={event => setModel(event.target.value)}><option value="small">Whisper small · 轻量基线</option><option value="turbo">Whisper turbo · 质量对照</option></select><button className="button" disabled={busy || !!activeJob} onClick={() => void run(async () => { await api(`/lectures/${lectureId}/transcribe`, { method: 'POST', body: JSON.stringify({ model, force: !!detail.transcript }) }); await refreshDetail() })}><AudioLines size={15} />{detail.transcript ? '重新转录' : '开始本地转录'}</button></div><div><select aria-label="笔记方式" value={provider} onChange={event => { setProvider(event.target.value); setConsent(false) }}><option value="extractive">本地逐段摘录（非 AI）</option><option value="api">AI 接口整理</option></select><button className="button primary" disabled={busy || !!activeJob || !detail.transcript || Object.keys(dirty).length > 0 || (provider === 'api' && (!consent || !settings?.notes_api?.configured))} onClick={() => void run(startNotes)}><Sparkles size={15} />整理笔记</button></div></div>
+        <div className="work-toolbar"><div><select aria-label="转录模型" value={model} onChange={event => setModel(event.target.value)}><option value="small">Whisper small · 轻量基线</option><option value="turbo">Whisper turbo · 质量对照</option></select><button className="button" disabled={busy || !!activeJob} onClick={() => void run(async () => { await api(`/lectures/${lectureId}/transcribe`, { method: 'POST', body: JSON.stringify({ model, force: !!detail.transcript }) }); await refreshDetail() })}><AudioLines size={15} />{detail.transcript ? '重新转录' : '开始本地转录'}</button></div><div><select aria-label="笔记方式" value={provider} onChange={event => { setProvider(event.target.value); setConsent(false) }}><option value="extractive">本地逐段摘录（非 AI）</option><option value="api">AI 接口整理</option></select><button className="button primary" disabled={busy || !!activeJob || noteDirty || bodyDirty || !detail.transcript || Object.keys(dirty).length > 0 || (provider === 'api' && (!consent || !settings?.notes_api?.configured))} onClick={() => void run(startNotes)}><Sparkles size={15} />{hasCurrentNote ? '重新整理' : '整理笔记'}</button></div></div>
+        {(noteDirty || bodyDirty) && <p className="cloud-consent">请先保存或放弃笔记修改，再整理新版本。</p>}
         {provider === 'api' && <div className="cloud-consent"><label><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} />将当前转录文字发送至 {settings?.notes_api?.base_url || '你配置的接口'}，不发送音频。</label>{!settings?.notes_api?.configured && <span>请在左侧「设置」中填写 API URL、模型和密钥。</span>}</div>}
         {activeJob && <JobStatus job={activeJob} onCancel={() => void run(async () => { await api(`/jobs/${activeJob.id}/cancel`, { method: 'POST' }); await refreshDetail() })} />}
         {!activeJob && detail.jobs[0]?.state === 'failed' && <div className="job-status failed"><CircleHelp size={17} /><span>{detail.jobs[0].error}</span><button onClick={() => void run(async () => { await api(`/jobs/${detail.jobs[0].id}/retry`, { method: 'POST' }); await refreshDetail() })}><RotateCcw size={14} />重试失败阶段</button></div>}
