@@ -18,8 +18,8 @@ function mockRoutes(extra: Record<string, unknown> = {}) {
     return (typeof value === 'function' ? value(options) : value) as T
   })
 }
-beforeEach(() => { localStorage.clear(); vi.mocked(api).mockReset(); mockRoutes() })
-afterEach(() => { cleanup(); vi.useRealTimers() })
+beforeEach(() => { localStorage.clear(); vi.mocked(api).mockReset(); mockRoutes(); vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(); vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {}) })
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks() })
 
 it('设置保留本地模型状态，移除云端笔记与预算面板', async () => {
   render(<App />)
@@ -81,6 +81,7 @@ it('重新整理创建新任务，完成后自动显示新版本并保留旧笔�
   })
   render(<App />)
   expect(await screen.findByText('第一版正文')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '转录与整理' }))
   vi.useFakeTimers()
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: '重新整理' })) })
   expect(submitted.force).toBe(true)
@@ -97,8 +98,80 @@ it('正文修改尚未保存时禁止重新整理，避免切换结果丢失草�
   mockRoutes({ '/courses': [{ id: 'c1', name: '第一门课' }], '/courses/c1/lectures': [detail], '/lectures/l1': detail })
   render(<App />)
   await screen.findByText('第一版正文')
+  fireEvent.click(screen.getByRole('button', { name: '转录与整理' }))
   fireEvent.click(screen.getByLabelText('修改笔记 1.1'))
   fireEvent.change(screen.getByLabelText('笔记正文 1.1'), { target: { value: '未保存的修订' } })
   expect(screen.getByRole('button', { name: '重新整理' })).toBeDisabled()
   expect(screen.getByLabelText('笔记正文 1.1')).toHaveValue('未保存的修订')
+})
+
+
+function mockNoteWorkspace(detail: Detail) {
+  mockRoutes({ '/courses': [{ id: 'c1', name: '第一门课' }], '/courses/c1/lectures': [detail], '/lectures/l1': detail })
+}
+
+it('阅读时默认收起原文和播放器，需要时独立展开，关闭播放器会暂停', async () => {
+  const { detail } = noteWorkspace()
+  mockNoteWorkspace(detail)
+  render(<App />)
+  await screen.findByText('第一版正文')
+  expect(screen.getByLabelText('课堂原文面板')).not.toBeVisible()
+  expect(screen.getByLabelText('录音播放器')).not.toBeVisible()
+  expect(screen.getByRole('button', { name: '转录与整理' })).toHaveAttribute('aria-expanded', 'false')
+  fireEvent.click(screen.getByRole('button', { name: '课堂原文' }))
+  fireEvent.click(screen.getByRole('button', { name: '播放器' }))
+  expect(screen.getByLabelText('课堂原文面板')).toBeVisible()
+  expect(screen.getByLabelText('录音播放器')).toBeVisible()
+  fireEvent.click(screen.getByLabelText('关闭课堂原文'))
+  expect(screen.getByLabelText('课堂原文面板')).not.toBeVisible()
+  expect(screen.getByLabelText('录音播放器')).toBeVisible()
+  fireEvent.click(screen.getByLabelText('关闭播放器'))
+  expect(HTMLMediaElement.prototype.pause).toHaveBeenCalledOnce()
+  expect(screen.getByLabelText('录音播放器')).not.toBeVisible()
+})
+
+it('点击笔记引用自动展开原文和播放器并定位播放时间', async () => {
+  const { detail } = noteWorkspace()
+  detail.duration = 120
+  detail.transcript!.segments[0].start_ms = 61000
+  detail.transcript!.segments[0].end_ms = 64000
+  mockNoteWorkspace(detail)
+  const view = render(<App />)
+  await screen.findByText('第一版正文')
+  fireEvent.click(screen.getByRole('button', { name: /01:01/ }))
+  expect(screen.getByLabelText('课堂原文面板')).toBeVisible()
+  expect(screen.getByLabelText('录音播放器')).toBeVisible()
+  expect(view.container.querySelector('audio')!.currentTime).toBe(61)
+  expect(HTMLMediaElement.prototype.play).toHaveBeenCalledOnce()
+})
+
+it('收起课程列表后仍保留当前笔记和编辑内容', async () => {
+  const { detail } = noteWorkspace()
+  mockNoteWorkspace(detail)
+  render(<App />)
+  await screen.findByText('第一版正文')
+  fireEvent.click(screen.getByLabelText('修改笔记 1.1'))
+  fireEvent.change(screen.getByLabelText('笔记正文 1.1'), { target: { value: '正在编辑' } })
+  fireEvent.click(screen.getByLabelText('收起课程列表'))
+  expect(screen.queryByRole('complementary', { name: '课程列表' })).not.toBeInTheDocument()
+  expect(screen.getByLabelText('笔记正文 1.1')).toHaveValue('正在编辑')
+  fireEvent.click(screen.getByLabelText('展开课程列表'))
+  expect(screen.getByRole('complementary', { name: '课程列表' })).toBeInTheDocument()
+})
+
+it('从资料页打开示例时直接进入文档，不要求先打开侧栏', async () => {
+  const { detail } = noteWorkspace()
+  localStorage.clear()
+  const example = { ...detail, id: 'example' }
+  let created = false
+  mockRoutes({
+    '/courses': () => created ? [{ id: 'c1', name: '第一门课' }, { id: 'c2', name: '示例课程' }] : [{ id: 'c1', name: '第一门课' }],
+    '/courses/c1/lectures': [], '/courses/c2/lectures': [example], '/lectures/example': example,
+    '/demo': () => { created = true; return { course_id: 'c2', lecture_id: 'example' } },
+  })
+  render(<App />)
+  await screen.findByRole('heading', { name: '第一门课' })
+  fireEvent.click(screen.getByRole('button', { name: '打开内置示例' }))
+  expect(await screen.findByRole('heading', { name: '测试课堂' })).toBeInTheDocument()
+  expect(await screen.findByText('第一版正文')).toBeInTheDocument()
 })
