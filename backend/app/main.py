@@ -270,8 +270,20 @@ def lecture_detail(lecture_id: str):
 def start_transcribe(lecture_id: str, body: TranscribeInput):
     with session() as db:
         require(db, Lecture, lecture_id)
+    if body.after_transcribe and body.after_transcribe.provider == "api":
+        config = load_api_config()
+        if not config.configured:
+            raise HTTPException(400, "请先在设置中填写 AI 接口 URL、模型和密钥")
+        if (
+            not body.after_transcribe.consent
+            or body.after_transcribe.api_revision != config.revision
+        ):
+            raise HTTPException(409, "请核对当前 AI 接口设置，确认在录音结束后发送转录文本")
     identifier = jobs.create_job(
-        lecture_id, "transcribe", body.model_dump(exclude={"force"}), force=body.force
+        lecture_id,
+        "transcribe",
+        body.model_dump(exclude={"force"}, exclude_none=True),
+        force=body.force,
     )
     with session() as db:
         return row_dict(require(db, Job, identifier))

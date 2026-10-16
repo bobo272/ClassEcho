@@ -23,6 +23,11 @@
 .recording-error { color: #a45b5b; font-size: 12px; line-height: 1.8; margin-top: 16px; }
 .recording-option { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; font-size: 12px; }
 .recording-option input { margin-top: 4px; }
+.recording-processing { margin-top: 12px; font-size: 12px; }
+.recording-processing > label { display: block; }
+.recording-processing select { display: block; width: 100%; margin-top: 8px; }
+.recording-processing > p { margin-top: 8px; }
+.recording-processing > .recording-option { display: flex; overflow-wrap: anywhere; }
 .live-preview { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px; }
 .live-preview h3 { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
 .live-preview > p { font-size: 12px; }

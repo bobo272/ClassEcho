@@ -63,10 +63,17 @@ class TranscriptEdit(StrictModel):
         return value
 
 
+class AfterTranscription(StrictModel):
+    provider: Literal["extractive", "api"]
+    consent: bool = False
+    api_revision: str = Field(default="", max_length=80)
+
+
 class TranscribeInput(StrictModel):
     model: Literal["small", "turbo"] = "small"
     initial_prompt: str = Field(default="", max_length=2000)
     force: bool = False
+    after_transcribe: AfterTranscription | None = None
 
 
 class NoteInput(StrictModel):

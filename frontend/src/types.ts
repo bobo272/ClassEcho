@@ -8,3 +8,4 @@ export type Lecture = { id: string; title: string; duration: number; is_demo: bo
 export type Detail = Lecture & { transcript: Transcript | null; transcript_versions: Omit<Transcript, 'segments'>[]; notes: Note[]; jobs: Job[]; bookmarks: { id: string; position_ms: number; question: string }[] }
 export type NotesAPIConfig = { base_url: string; model: string; configured: boolean; key_configured: boolean; revision: string }
 export type Settings = { notes_api: NotesAPIConfig; models: { name: string; ready: boolean }[] }
+export type AfterTranscription = { provider: 'extractive' | 'api'; consent: boolean; api_revision: string }

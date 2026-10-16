@@ -187,6 +187,7 @@ def execute_job(job_id):
                     parameters["model"],
                     parameters.get("initial_prompt", ""),
                 )
+                followup_id = None
                 with session() as db:
                     transcript = Transcript(
                         id=new_id(),
@@ -206,7 +207,22 @@ def execute_job(job_id):
                         transcript.id,
                         now(),
                     )
+                    if options := parameters.get("after_transcribe"):
+                        # Publish the transcript and the next durable task atomically:
+                        # a browser refresh can never observe a completed chain with
+                        # no follow-up task. Never send audio to the notes provider.
+                        followup_id = new_id()
+                        db.add(
+                            Job(
+                                id=followup_id,
+                                lecture_id=lecture.id,
+                                kind="notes",
+                                parameters={**options, "transcript_id": transcript.id},
+                            )
+                        )
                     db.commit()
+                if followup_id:
+                    dispatch(followup_id)
         else:
             with session() as db:
                 transcript = db.get(Transcript, parameters["transcript_id"])

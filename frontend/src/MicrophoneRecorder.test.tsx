@@ -33,6 +33,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 it('录音、暂停、继续、停止及保存；先停止麦克风再保留预览', async () => {
   const save = vi.fn().mockResolvedValue(undefined)
   render(<MicrophoneRecorder courseName="测试课" onClose={vi.fn()} onSave={save} />)
+  fireEvent.click(screen.getByRole('checkbox', { name: '结束后自动整理笔记' }))
   fireEvent.click(screen.getByRole('button', { name: '开始录音' }))
   await screen.findByRole('button', { name: '暂停录音' })
   expect(getUserMedia).toHaveBeenCalledWith(expect.objectContaining({ video: false }))
@@ -69,6 +70,7 @@ it('权限请求期间关闭，随后到达的媒体流也会被释放', async (
 it('上传失败保留录音和下载入口；取消关闭不丢失录音', async () => {
   const close = vi.fn(), save = vi.fn().mockRejectedValue(new Error('网络中断'))
   render(<MicrophoneRecorder courseName="测试课" onClose={close} onSave={save} />)
+  fireEvent.click(screen.getByRole('checkbox', { name: '结束后自动整理笔记' }))
   fireEvent.click(screen.getByRole('button', { name: '开始录音' }))
   await screen.findByRole('button', { name: '结束录音' })
   fireEvent.click(screen.getByRole('button', { name: '结束录音' }))
@@ -82,4 +84,42 @@ it('上传失败保留录音和下载入口；取消关闭不丢失录音', asyn
 
 it('Safari MP4 使用 m4a 后缀，文件名去除路径字符', () => {
   expect(recordingFile(new Blob(['audio'], { type: 'audio/mp4' }), '../课堂/录音').name).toBe('.._课堂_录音.m4a')
+})
+
+it('结束录音后自动保存并携带整理选项，失败后可以重试且保留音频', async () => {
+  const save = vi.fn().mockRejectedValueOnce(new Error('队列暂不可用')).mockResolvedValue(undefined)
+  render(<MicrophoneRecorder courseName="测试课" onClose={vi.fn()} onSave={save} />)
+  fireEvent.click(screen.getByRole('button', { name: '开始录音' }))
+  await screen.findByRole('button', { name: '结束录音' })
+  fireEvent.click(screen.getByRole('button', { name: '结束录音' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('队列暂不可用')
+  expect(save.mock.calls[0][1]).toEqual({ provider: 'extractive', consent: false, api_revision: '' })
+  expect(screen.getByRole('link', { name: '下载录音' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '重试保存并整理' }))
+  expect(await screen.findByRole('button', { name: '已保存' })).toBeDisabled()
+  expect(save).toHaveBeenCalledTimes(2)
+})
+
+it('AI 整理必须确认具体地址，录音开始后冻结目的地址与配置版本', async () => {
+  const config = { base_url: 'https://relay.example.invalid/v1', model: 'test-model', configured: true, key_configured: true, revision: 'revision-1' }
+  const save = vi.fn().mockResolvedValue(undefined)
+  render(<MicrophoneRecorder courseName="测试课" notesAPI={config} onClose={vi.fn()} onSave={save} />)
+  expect(screen.getByRole('button', { name: '开始录音' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('checkbox', { name: /结束后将转录文字发送至/ }))
+  fireEvent.click(screen.getByRole('button', { name: '开始录音' }))
+  await screen.findByRole('button', { name: '结束录音' })
+  expect(screen.getByRole('combobox', { name: '录音后的笔记方式' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: '结束录音' }))
+  await waitFor(() => expect(save).toHaveBeenCalledOnce())
+  expect(save.mock.calls[0][1]).toEqual({ provider: 'api', consent: true, api_revision: 'revision-1' })
+})
+
+it('浏览器自行结束录音也会释放麦克风并保留已有音频', async () => {
+  render(<MicrophoneRecorder courseName="测试课" onClose={vi.fn()} onSave={vi.fn()} />)
+  fireEvent.click(screen.getByRole('checkbox', { name: '结束后自动整理笔记' }))
+  fireEvent.click(screen.getByRole('button', { name: '开始录音' }))
+  await screen.findByRole('button', { name: '结束录音' })
+  act(() => { FakeRecorder.instance.stop() })
+  expect(track.stop).toHaveBeenCalled()
+  expect(screen.getByLabelText('本次录音预览')).toBeInTheDocument()
 })

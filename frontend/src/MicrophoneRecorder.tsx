@@ -4,12 +4,12 @@ import Dialog from './Dialog'
 import { timeLabel } from './api'
 import { microphoneError, recordingFile, recordingFormat } from './microphone'
 import { LiveTranscription } from './liveTranscription'
-import type { Segment } from './types'
+import type { AfterTranscription, NotesAPIConfig, Segment } from './types'
 
 type Phase = 'idle' | 'requesting' | 'recording' | 'paused' | 'review' | 'saving'
 
-export default function MicrophoneRecorder({ courseName, liveReady = false, onClose, onSave }: {
-  courseName: string; liveReady?: boolean; onClose: () => void; onSave: (file: File) => Promise<void>
+export default function MicrophoneRecorder({ courseName, liveReady = false, notesAPI, onClose, onSave }: {
+  courseName: string; liveReady?: boolean; notesAPI?: NotesAPIConfig; onClose: () => void; onSave: (file: File, processing?: AfterTranscription) => Promise<void>
 }) {
   const [phase, setPhase] = useState<Phase>('idle')
   const [title, setTitle] = useState(() => `课堂录音 ${new Date().toLocaleString('zh-CN', { hour12: false })}`)
@@ -20,6 +20,12 @@ export default function MicrophoneRecorder({ courseName, liveReady = false, onCl
   const [liveEnabled, setLiveEnabled] = useState(true)
   const [liveStatus, setLiveStatus] = useState('')
   const [liveSegments, setLiveSegments] = useState<Segment[]>([])
+  const [autoNotes, setAutoNotes] = useState(true)
+  const [notesProvider, setNotesProvider] = useState<'extractive' | 'api'>(notesAPI?.configured ? 'api' : 'extractive')
+  const [consent, setConsent] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const processing = useRef<AfterTranscription | undefined>(undefined)
+  const saving = useRef(false)
   const live = useRef<LiveTranscription | null>(null)
   const mounted = useRef(true)
   const recorder = useRef<MediaRecorder | null>(null)
@@ -28,6 +34,8 @@ export default function MicrophoneRecorder({ courseName, liveReady = false, onCl
   const bytes = useRef(0)
   const clock = useRef({ total: 0, since: 0 })
   const starting = useRef(false)
+  const needsConsent = autoNotes && notesProvider === 'api' && (!notesAPI?.configured || !consent)
+  useEffect(() => { setConsent(false) }, [notesAPI?.revision])
 
   function duration() { return clock.current.total + (clock.current.since ? performance.now() - clock.current.since : 0) }
   function stop() {
@@ -60,15 +68,16 @@ export default function MicrophoneRecorder({ courseName, liveReady = false, onCl
     return () => window.clearInterval(timer)
   }, [phase])
   useEffect(() => {
-    if (phase === 'idle') return
+    if (phase === 'idle' || saved) return
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [phase])
+  }, [phase, saved])
 
   async function start() {
-    if (starting.current) return
+    if (starting.current || needsConsent || !title.trim()) return
     starting.current = true; setError(''); setPhase('requesting')
+    processing.current = autoNotes ? { provider: notesProvider, consent: notesProvider === 'api' && consent, api_revision: notesProvider === 'api' ? notesAPI?.revision ?? '' : '' } : undefined
     let input: MediaStream | null = null
     try {
       const mimeType = recordingFormat()
@@ -82,7 +91,7 @@ export default function MicrophoneRecorder({ courseName, liveReady = false, onCl
         )
         live.current = preview
         try { await preview.start(input) }
-        catch { preview.dispose(); setLiveStatus('实时采音不可用；仍可录音并在结束后转录。') }
+        catch { preview.dispose(); if (mounted.current) setLiveStatus('实时采音不可用；仍可录音并在结束后转录。') }
         if (!mounted.current) { preview.dispose(); input.getTracks().forEach(track => track.stop()); return }
       }
       const media = new MediaRecorder(input, { mimeType })
@@ -94,8 +103,13 @@ export default function MicrophoneRecorder({ courseName, liveReady = false, onCl
       }
       media.onstop = () => {
         if (!mounted.current) return
+        clock.current.total = duration(); clock.current.since = 0; setElapsed(clock.current.total)
+        live.current?.dispose(); input?.getTracks().forEach(track => track.stop())
         const result = new Blob(chunks.current, { type: media.mimeType || mimeType })
-        if (result.size) { setBlob(result); setPhase('review') }
+        if (result.size) {
+          setBlob(result); setPhase('review')
+          if (processing.current) void save(result)
+        }
         else { setError('没有录到音频，请检查输入设备后重试。'); setPhase('idle') }
       }
       media.onerror = () => { if (mounted.current) { setError('录音设备发生错误，已结束录音；可保存已有内容。'); stop() } }
@@ -117,29 +131,33 @@ export default function MicrophoneRecorder({ courseName, liveReady = false, onCl
   }
   function close() {
     if (phase === 'saving') return
-    if (phase !== 'idle' && !window.confirm('录音尚未保存，确定关闭并放弃本次录音吗？')) return
+    if (phase !== 'idle' && !saved && !window.confirm('录音尚未保存，确定关闭并放弃本次录音吗？')) return
     onClose()
   }
-  async function save() {
-    if (!blob) return
+  async function save(content: Blob | null = blob) {
+    if (!content || saving.current || saved) return
+    saving.current = true
     setPhase('saving'); setError('')
-    try { await onSave(recordingFile(blob, title)) }
+    try { await onSave(recordingFile(content, title), processing.current); if (mounted.current) { setSaved(true); setPhase('review') } }
     catch (failure) { if (mounted.current) { setError(microphoneError(failure)); setPhase('review') } }
+    finally { saving.current = false }
   }
 
   return <Dialog title="麦克风录音" closeLabel="关闭录音" onClose={close} className="recording-modal">
     <div className="recording-context">保存到「{courseName}」</div>
-    <label className="recording-title">录音名称<input aria-label="录音名称" value={title} maxLength={120} disabled={phase === 'saving'} onChange={event => setTitle(event.target.value)} /></label>
+    <label className="recording-title">录音名称<input aria-label="录音名称" value={title} maxLength={120} disabled={phase !== 'idle'} onChange={event => setTitle(event.target.value)} /></label>
     <div className="recording-status" role="status"><Mic size={18} /><strong>{timeLabel(elapsed)}</strong><span>{({ idle: '准备录音', requesting: '等待麦克风权限', recording: '正在录音', paused: '已暂停', review: '录音已结束', saving: '保存中' })[phase]}</span></div>
     <p className="muted recording-help">请保持页面打开。只录制麦克风输入，最长 90 分钟；暂停期间不计入录音。</p>
     <label className="recording-option"><input type="checkbox" checked={liveEnabled} disabled={phase !== 'idle' || !liveReady} onChange={event => setLiveEnabled(event.target.checked)} />本地实时转录（约每 10 秒更新）</label>
     {!liveReady && <p className="muted recording-help">Whisper small 尚未就绪，实时预览暂不可用；保存录音后可下载模型并转录。</p>}
+    <label className="recording-option"><input type="checkbox" checked={autoNotes} disabled={phase !== 'idle'} onChange={event => setAutoNotes(event.target.checked)} />结束后自动整理笔记</label>
+    {autoNotes && <div className="recording-processing"><label>笔记整理方式<select aria-label="录音后的笔记方式" value={notesProvider} disabled={phase !== 'idle'} onChange={event => { setNotesProvider(event.target.value as 'api' | 'extractive'); setConsent(false) }}><option value="extractive">本地摘录（非 AI）</option><option value="api" disabled={!notesAPI?.configured}>AI 接口整理{!notesAPI?.configured ? '（请先在设置中配置）' : ''}</option></select></label><p className="muted">结束后自动保存录音、校准完整转录并整理笔记。{!notesAPI?.configured && '当前未配置 AI 接口，只生成本地摘录。'}</p>{notesProvider === 'api' && <label className="recording-option"><input type="checkbox" checked={consent} disabled={phase !== 'idle'} onChange={event => setConsent(event.target.checked)} /><span>结束后将转录文字发送至 {notesAPI?.base_url} 整理笔记，音频留在本机。</span></label>}</div>}
     <div className="recording-actions">
-      {phase === 'idle' && <button className="button primary" onClick={() => void start()}><Mic size={15} />开始录音</button>}
+      {phase === 'idle' && <button className="button primary" disabled={needsConsent || !title.trim()} onClick={() => void start()}><Mic size={15} />开始录音</button>}
       {(phase === 'recording' || phase === 'paused') && <><button className="button" onClick={togglePause}>{phase === 'paused' ? <Play size={15} /> : <Pause size={15} />}{phase === 'paused' ? '继续录音' : '暂停录音'}</button><button className="button" onClick={stop}><Square size={14} />结束录音</button></>}
     </div>
     {liveStatus && <div className="live-preview"><h3>实时转录预览</h3><p className="muted" role="status">{phase === 'review' || phase === 'saving' ? '预览已停止，保存后可用完整录音校准。' : liveStatus}</p><div className="live-preview-lines" aria-label="实时识别文字">{liveSegments.map(segment => <p key={segment.id}><time>{timeLabel(segment.start_ms)}</time><span>{segment.text}</span></p>)}</div></div>}
-    {blob && <div className="recording-review"><audio controls src={url} aria-label="本次录音预览" /><div className="recording-actions"><button className="button primary" disabled={phase === 'saving' || !title.trim()} onClick={() => void save()}>{phase === 'saving' ? '保存中…' : '保存录音'}</button><a className="button" href={url} download={recordingFile(blob, title).name}><Download size={14} />下载录音</a></div></div>}
+    {blob && <div className="recording-review"><audio controls src={url} aria-label="本次录音预览" /><div className="recording-actions"><button className="button primary" disabled={phase === 'saving' || saved || !title.trim()} onClick={() => void save()}>{saved ? '已保存' : phase === 'saving' ? '保存中…' : processing.current ? '重试保存并整理' : '保存录音'}</button><a className="button" href={url} download={recordingFile(blob, title).name}><Download size={14} />下载录音</a></div></div>}
     {error && <p className="recording-error" role="alert">{error}</p>}
   </Dialog>
 }
