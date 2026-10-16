@@ -23,6 +23,7 @@ class Settings:
     max_duration: float = 90 * 60
     max_output_tokens: int = 4096
     max_note_chars: int = 60000
+    api_port: int = 8765
 
 
 @lru_cache
@@ -44,7 +45,10 @@ def get_settings() -> Settings:
         budget_cny=float(os.getenv("CLASSECHO_BUDGET_CNY", "0")),
         input_price=price("QWEN_INPUT_CNY_PER_MILLION"),
         output_price=price("QWEN_OUTPUT_CNY_PER_MILLION"),
+        api_port=int(os.getenv("CLASSECHO_API_PORT", "8765")),
     )
+    if not 1 <= settings.api_port <= 65535:
+        raise ValueError("本机 API 端口须在 1—65535 之间")
     if (
         not math.isfinite(settings.budget_cny)
         or settings.budget_cny < 0

@@ -2,6 +2,7 @@
 
 import argparse
 import fcntl
+import json
 import os
 import shutil
 import signal
@@ -32,9 +33,14 @@ def port_free(port):
 def main():
     parser = argparse.ArgumentParser(description="启动 ClassEcho 本地应用；Ctrl+C 停止")
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--ready-file", type=Path)
     args = parser.parse_args()
     settings = get_settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
+    api_port = settings.api_port
+    ready = args.ready_file.resolve() if args.ready_file else None
+    if ready and not ready.is_relative_to(settings.data_dir):
+        raise SystemExit("启动握手文件必须位于当前数据目录。")
     lock = (settings.data_dir / ".run.lock").open("a")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -45,8 +51,8 @@ def main():
             raise SystemExit(f"缺少 {tool}，请先运行 bash scripts/setup.sh。")
     if not (ROOT / "frontend" / "dist" / "index.html").is_file():
         raise SystemExit("尚未构建前端，请先运行 npm --prefix frontend run build。")
-    if not port_free(8765):
-        raise SystemExit("本机 8765 端口被占用，请先停止之前的 ClassEcho 服务。")
+    if not port_free(api_port):
+        raise SystemExit(f"本机 {api_port} 端口被占用，请先停止之前的 ClassEcho 服务。")
     redis = urlsplit(settings.redis_url)
     if redis.hostname not in ("127.0.0.1", "localhost") or redis.scheme != "redis":
         raise SystemExit("启动器仅支持本机 Redis；其他部署请手动启动各进程。")
@@ -120,7 +126,7 @@ def main():
                 "--host",
                 "127.0.0.1",
                 "--port",
-                "8765",
+                str(api_port),
             ],
         )
         for _ in range(100):
@@ -128,20 +134,37 @@ def main():
                 raise RuntimeError("服务启动失败，请查看 data/logs/")
             try:
                 with urllib.request.urlopen(
-                    "http://127.0.0.1:8765/api/health", timeout=1
+                    f"http://127.0.0.1:{api_port}/api/health", timeout=1
                 ) as response:
-                    if response.status == 200:
+                    content = json.load(response)
+                    if response.status == 200 and content.get("instance_id") == os.getenv(
+                        "CLASSECHO_INSTANCE_ID"
+                    ):
                         break
             except OSError:
                 time.sleep(0.1)
         else:
             raise RuntimeError("本机 API 启动超时，请查看 data/logs/api.log")
-        print("ClassEcho 已启动：http://127.0.0.1:8765", flush=True)
+        if ready:
+            ready.parent.mkdir(parents=True, exist_ok=True)
+            temporary = ready.with_suffix(".tmp")
+            temporary.write_text(
+                json.dumps(
+                    {
+                        "url": f"http://127.0.0.1:{api_port}",
+                        "instance_id": os.getenv("CLASSECHO_INSTANCE_ID"),
+                        "pid": os.getpid(),
+                    }
+                )
+            )
+            temporary.chmod(0o600)
+            temporary.replace(ready)
+        print(f"ClassEcho 已启动：http://127.0.0.1:{api_port}", flush=True)
         print(
             "按 Ctrl+C 停止本次启动的 API、worker 和 Redis。日志保存在本机 data/logs/。", flush=True
         )
         if not args.no_browser:
-            webbrowser.open("http://127.0.0.1:8765")
+            webbrowser.open(f"http://127.0.0.1:{api_port}")
         while all(child.poll() is None for child in children):
             time.sleep(0.5)
         raise RuntimeError("有服务意外退出，请查看 data/logs/，修复后重新启动。")
@@ -168,6 +191,8 @@ def main():
             db.commit()
         for log in logs:
             log.close()
+        if ready:
+            ready.unlink(missing_ok=True)
         lock.close()
 
 

@@ -1,4 +1,5 @@
 import hashlib
+import os
 import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -51,7 +52,7 @@ async def local_origin(request: Request, call_next):
             if (
                 parsed.scheme != "http"
                 or parsed.hostname not in ("localhost", "127.0.0.1")
-                or parsed.port not in (5173, 8765)
+                or parsed.port not in (5173, get_settings().api_port)
             ):
                 return JSONResponse({"detail": "拒绝来自其他网站的本机写入请求"}, status_code=403)
     response = await call_next(request)
@@ -79,7 +80,10 @@ def health():
         available = True
     except Exception:
         available = False
-    return {"status": "ok", "redis": available}
+    result = {"status": "ok", "redis": available}
+    if instance := os.getenv("CLASSECHO_INSTANCE_ID"):
+        result["instance_id"] = instance
+    return result
 
 
 @app.get("/api/settings")
