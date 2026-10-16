@@ -81,7 +81,7 @@ npm --prefix frontend run build
 
 请在仓库根目录使用 `python -m pytest` 启动测试，确保 `backend` 包能够被导入。
 
-当前本机后端 72 项测试、前端 34 项前端测试与生产构建已通过。CI 配置见 `.github/workflows/ci.yml`，远端是否通过以 GitHub Actions 实际结果为准。测试使用临时音频和模拟模型响应，不代表真实识别质量通过。
+当前本机后端 74 项测试、前端 34 项前端测试与生产构建已通过。CI 配置见 `.github/workflows/ci.yml`，远端是否通过以 GitHub Actions 实际结果为准。测试使用临时音频和模拟模型响应，不代表真实识别质量通过。
 
 开发前后端时，可分别运行 `uv run uvicorn backend.app.main:app --host 127.0.0.1 --port 8765` 与 `npm --prefix frontend run dev`；转录和笔记任务还需要本机 Redis 和 `uv run python -m backend.app.worker`。统一启动器与手动 API 不应同时占用 8765 端口。
 
@@ -128,4 +128,12 @@ npm --prefix frontend run build
 
 2026-10-16 在临时数据库与独立 TCP Redis 中，用项目内置示例构造的 10 秒 WebM（无时长头）实测：导入、真实 MLX Whisper small 转录、RQ 自动接续本地摘录成功，共约 3.06 秒，1 份笔记及 1 个有效引用。真实外部 AI 的自动整理仍只通过模拟服务验证；真实麦克风设备、Safari 录音和长时间录音尚待人工验收。麦克风原始采集与暂停／继续、页面资源释放、权限失败、采样转换、发送确认及保存重试已覆盖自动化测试。
 
-桌面运行入口位于 `desktop/runtime.py`：为独立数据目录选择本机端口，启动生产页面及其 API/worker/Redis，通过实例握手确认服务归属，退出时清理自己创建的进程；不接管开发服务。桌面安装包的构建与签名验收另行记录。
+## macOS 桌面安装包
+
+原生 AppKit / WKWebView 窗口内置独立 Python、转录依赖、FFmpeg 和 Redis；安装后无需终端启动脚本、Homebrew、Node 或系统 Python。当前为 Apple Silicon / macOS 26.2+ 预览包，仅本地 ad-hoc 签名，尚未进行 Developer ID 签名与 Apple 公证。
+
+构建：`uv run --locked python scripts/build_desktop.py --check`。DMG、SHA256 与构建清单输出到 `dist/macos/`，不进入 Git。双击 DMG 后将应用拖入 Applications；模型首次转录前单独下载。详细说明见 [桌面构建文档](desktop/README.md)。
+
+桌面运行入口位于 `desktop/runtime.py`：使用独立的 `~/Library/Application Support/ClassEcho/data`，选择本机端口、启动生产页面及 API/worker/Redis，通过实例握手确认服务归属；退出时清理自己创建的进程。不会自动迁移开发版 `data/` 或接管开发服务。安装包不包含个人录音、转录、数据库、接口配置或模型权重。
+
+2026-10-16，本机安装产物通过深度签名验证、194 个原生文件依赖检查、搬移后的 Python/MLX/Torch/SciPy/OpenCC 加载，以及独立数据目录内的 API/Redis/SpawnWorker 本地摘录、示例音频 AIFF 转码与拼接、媒体访问、Markdown/SRT/JSON 导出、退出清理；DMG 校验通过。示例使用自写文本与系统合成语音，不能代替真实课堂识别质量、硬件录音或另一台 Mac 的验收。
