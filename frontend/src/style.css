@@ -2,3 +2,5 @@
 @media(prefers-reduced-motion:reduce){.spin{animation:none}}
 
 .api-settings label{display:block;font-size:11px;margin-top:16px}.api-settings input{display:block;width:100%;margin-top:7px;font-size:12px}.api-settings small{display:block;font-size:10px;line-height:1.8;color:#84917b;margin-top:5px}.api-settings>.button{margin-top:20px}.api-settings [role="alert"]{color:#9c6245}.api-settings [role="status"]{color:#54784a}
+
+.note-edit-bar{display:flex;align-items:center;gap:10px;font-size:11px;margin-top:15px;padding:10px;background:#edf3e5;border-radius:5px}.note-edit-bar span{flex:1}.note-item-actions{display:flex;justify-content:flex-end;gap:9px;font-size:9px;color:#839177;min-height:18px}.note-item-actions button{color:#839177}.note-item textarea{width:100%;min-height:100px;font-size:12px;line-height:1.9;margin:5px 0}.note-item details{font-size:10px;color:#8b987e;margin:7px 0}.note-item details p{font-size:11px}

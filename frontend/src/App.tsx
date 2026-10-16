@@ -4,6 +4,7 @@ import { api, noteIsStale, timeLabel } from './api'
 import type { Course, Detail, Job, Lecture, Note, Segment, Settings, Transcript } from './types'
 import TranscriptPane from './TranscriptPane'
 import APISettings from './APISettings'
+import NoteContent from './NoteContent'
 
 const stageNames: Record<string, string> = { queued: '等待处理', normalize: '规范化音频', download: '检查或下载模型（首次较慢）', transcribe: '本地转录中', draft: '整理笔记中', validate: '检查来源引用', complete: '已完成' }
 
@@ -30,6 +31,8 @@ export default function App() {
   const [noteId, setNoteId] = useState('')
   const [userText, setUserText] = useState('')
   const [noteDirty, setNoteDirty] = useState(false)
+  const [noteEdits, setNoteEdits] = useState<Record<string, string>>({})
+  const bodyDirty = Object.keys(noteEdits).length > 0
   const noteVersion = useRef<{ id: string; edit_version: number } | null>(null)
   const [source, setSource] = useState<Transcript | null>(null)
   const [showNoteSource, setShowNoteSource] = useState(false)
@@ -68,7 +71,7 @@ export default function App() {
   }, [courseId])
   useEffect(() => {
     let active = true
-    setDetail(null); setDirty({}); setNoteDirty(false); setNoteId(''); setPosition(0); setSource(null); setShowNoteSource(false)
+    setDetail(null); setDirty({}); setNoteDirty(false); setNoteEdits({}); setNoteId(''); setPosition(0); setSource(null); setShowNoteSource(false)
     if (lectureId) api<Detail>(`/lectures/${lectureId}`).then(value => { if (active) setDetail(value) }).catch(error => { if (active) setError(error.message) })
     return () => { active = false }
   }, [lectureId])
@@ -87,21 +90,21 @@ export default function App() {
     if (!noteId && detail?.notes[0]) setNoteId(detail.notes[0].id)
   }, [noteId, detail?.notes])
   useEffect(() => {
-    if (!noteDirty) {
+    if (!noteDirty && !bodyDirty) {
       setUserText(selectedNote?.user_markdown ?? '')
       noteVersion.current = selectedNote ? { id: selectedNote.id, edit_version: selectedNote.edit_version } : null
     }
-  }, [selectedNote?.id, selectedNote?.edit_version, noteDirty])
+  }, [selectedNote?.id, selectedNote?.edit_version, noteDirty, bodyDirty])
 
   function navigate(next: () => void) {
-    if ((noteDirty || Object.keys(dirty).length) && !window.confirm('有未保存的修改，确定放弃并切换吗？')) return
-    setDirty({}); setNoteDirty(false); next()
+    if ((noteDirty || bodyDirty || Object.keys(dirty).length) && !window.confirm('有未保存的修改，确定放弃并切换吗？')) return
+    setDirty({}); setNoteDirty(false); setNoteEdits({}); next()
   }
   useEffect(() => {
-    const handler = (event: BeforeUnloadEvent) => { if (noteDirty || Object.keys(dirty).length) { event.preventDefault(); event.returnValue = '' } }
+    const handler = (event: BeforeUnloadEvent) => { if (noteDirty || bodyDirty || Object.keys(dirty).length) { event.preventDefault(); event.returnValue = '' } }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [noteDirty, dirty])
+  }, [noteDirty, bodyDirty, dirty])
 
   async function createCourse(event: React.FormEvent) {
     event.preventDefault()
@@ -144,8 +147,8 @@ export default function App() {
   }
   async function saveNote() {
     if (!selectedNote || !noteVersion.current) return
-    await api(`/notes/${selectedNote.id}`, { method: 'PUT', body: JSON.stringify({ markdown: userText, edit_version: noteVersion.current.edit_version }) })
-    setNoteDirty(false); await refreshDetail(); setSuccess('用户笔记已保存')
+    await api(`/notes/${selectedNote.id}`, { method: 'PUT', body: JSON.stringify({ markdown: userText, text_edits: noteEdits, edit_version: noteVersion.current.edit_version }) })
+    setNoteDirty(false); setNoteEdits({}); await refreshDetail(); setSuccess('笔记修改已保存，原始正文和引用已保留')
   }
   async function openDemo() {
     const result = await api<{ course_id: string; lecture_id: string }>('/demo', { method: 'POST' })
@@ -189,7 +192,7 @@ export default function App() {
           {selectedNote ? <>
             {noteIsStale(selectedNote.transcript_id, detail.active_transcript_id) && <div className="stale-warning">这份笔记基于旧转录。引用仍回到旧版原文；可基于当前转录重新生成，旧笔记和用户修改会保留。</div>}
             <div className="note-kind"><span className="status-dot" />{selectedNote.provider === 'api' ? `AI 整理 · ${selectedNote.model} · 引用需核对` : selectedNote.provider === 'qwen' ? 'Qwen 整理 · 引用需核对' : '本地逐段摘录 / 预生成示例 · 非 AI 摘要'}</div>
-            <div className="note-content">{selectedNote.content.sections.map((section, index) => <section key={index}><h3><span>{(index + 1).toString().padStart(2, '0')}</span>{section.heading}</h3>{section.items.map((item, itemIndex) => <div className="note-item" key={itemIndex}><p>{item.text}</p><div className="citations">{item.source_segment_ids.map(id => { const segment = source?.segments.find(s => s.id === id); return <button disabled={!segment} key={id} onClick={() => { if (segment) { setShowNoteSource(source?.id !== detail.transcript?.id); seek(segment) } }}><Headphones size={11} />{segment ? timeLabel(segment.start_ms) : '加载引用'}<span>↗</span></button> })}</div></div>)}</section>)}</div>
+            <NoteContent key={selectedNote.id} note={selectedNote} segments={source?.segments ?? []} drafts={noteEdits} busy={busy} onEdit={(key, text) => setNoteEdits(previous => ({ ...previous, [key]: text }))} onSave={() => void run(saveNote)} onDiscard={() => setNoteEdits({})} onSeek={segment => { setShowNoteSource(source?.id !== detail.transcript?.id); seek(segment) }} />
             <div className="user-notes"><div><h3><FileText size={16} />我的补充</h3><button className="button small" disabled={!noteDirty || busy} onClick={() => void run(saveNote)}><Check size={14} />保存笔记</button></div><p>你的补充单独保存，重新整理不会覆盖。</p><textarea aria-label="我的补充笔记" placeholder="写下自己的理解、疑问，或粘贴 Markdown 笔记…" value={userText} onChange={event => { setUserText(event.target.value); setNoteDirty(true) }} /></div>
           </> : <div className="pane-empty"><FileText size={36} strokeWidth={1.2} /><h3>从听懂，到记住</h3><p>{detail.transcript ? '先核对右侧转录，再点击「整理笔记」。' : '先完成本地转录，笔记就从这里开始。'}</p></div>}
           <div className="bookmarks"><h3><CircleHelp size={15} />没听懂的地方</h3><form onSubmit={event => { event.preventDefault(); void run(async () => { await api(`/lectures/${lectureId}/bookmarks`, { method: 'POST', body: JSON.stringify({ position_ms: Math.round(position), question }) }); setQuestion(''); await refreshDetail() }) }}><input aria-label="回听疑问" value={question} onChange={event => setQuestion(event.target.value)} placeholder={`在 ${timeLabel(position)} 记下疑问…`} maxLength={2000} required /><button className="icon-button" aria-label="保存疑问" disabled={busy}><Plus size={17} /></button></form>{detail.bookmarks.map(mark => <div className="bookmark" key={mark.id}><button onClick={() => seek({ id: '', raw_text: '', text: '', start_ms: mark.position_ms, end_ms: Math.min(mark.position_ms + 15000, detail.duration * 1000) })}>{timeLabel(mark.position_ms)}</button><span>{mark.question}</span><button aria-label="删除疑问" onClick={() => void run(async () => { await api(`/bookmarks/${mark.id}`, { method: 'DELETE' }); await refreshDetail() })}><X size={13} /></button></div>)}</div>

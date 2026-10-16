@@ -14,14 +14,16 @@ def note_markdown(note, transcript):
     if note["provider"] in ("extractive", "demo"):
         lines += ["> 本地逐段摘录 / 预生成示例，未经云端 AI 整理。", ""]
     by_id = {segment["id"]: segment for segment in transcript["segments"]}
-    for section in note["content"]["sections"]:
+    for section_index, section in enumerate(note["content"]["sections"]):
         lines += [f"## {section['heading']}", ""]
-        for item in section["items"]:
+        for item_index, item in enumerate(section["items"]):
             refs = " ".join(
                 f"[{timestamp(by_id[source]['start_ms'])} · {source}]"
                 for source in item["source_segment_ids"]
             )
-            lines.append(f"- {item['text']} {refs}")
+            edited = note.get("text_edits", {}).get(f"{section_index}.{item_index}")
+            label = "（用户修订）" if edited is not None else ""
+            lines.append(f"- {edited if edited is not None else item['text']}{label} {refs}")
         lines.append("")
     if note.get("user_markdown") is not None:
         lines += ["## 用户笔记", "", note["user_markdown"], ""]

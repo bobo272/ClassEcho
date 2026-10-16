@@ -64,6 +64,7 @@ class Note(Base):
     model: Mapped[str]
     prompt_version: Mapped[str] = mapped_column(default="v1")
     content: Mapped[dict] = mapped_column(JSON)
+    text_edits: Mapped[dict] = mapped_column(JSON, default=dict)
     user_markdown: Mapped[str | None]
     edit_version: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[str] = mapped_column(default=now)

@@ -352,7 +352,25 @@ def edit_note(note_id: str, body: NoteEdit):
         note = require(db, Note, note_id)
         if note.edit_version != body.edit_version:
             raise HTTPException(409, "笔记已在其他页面修改，请刷新后重试")
-        note.user_markdown = body.markdown
+        if body.markdown is None and not body.text_edits:
+            raise HTTPException(400, "没有需要保存的笔记修改")
+        if body.text_edits:
+            originals = {
+                f"{section_index}.{item_index}": item["text"]
+                for section_index, section in enumerate(note.content["sections"])
+                for item_index, item in enumerate(section["items"])
+            }
+            if any(key not in originals for key in body.text_edits):
+                raise HTTPException(400, "修改包含不存在的笔记条目")
+            edits = dict(note.text_edits)
+            for key, value in body.text_edits.items():
+                if value is None or value == originals[key]:
+                    edits.pop(key, None)
+                else:
+                    edits[key] = value
+            note.text_edits = edits
+        if body.markdown is not None:
+            note.user_markdown = body.markdown
         note.edit_version += 1
         db.commit()
         return row_dict(note)
