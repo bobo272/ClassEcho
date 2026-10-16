@@ -211,5 +211,5 @@ export default function App() {
 function JobStatus({ job, onCancel }: { job: Job; onCancel: () => void }) {
   const [now, setNow] = useState(Date.now())
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [])
-  return <div className="job-status"><LoaderCircle className="spin" size={17} /><span>{stageNames[job.stage] ?? job.stage}</span><small>已用 {timeLabel(now - new Date(job.created_at).getTime())} · 关闭页面不会取消任务</small>{job.state === 'queued' && <button onClick={onCancel}>取消排队</button>}</div>
+  return <div className="job-status"><LoaderCircle className="spin" size={17} /><span>{stageNames[job.stage] ?? job.stage}{job.stage === 'draft' && job.checkpoint?.notes_progress && ` · 已完成 ${job.checkpoint.notes_progress.completed}/${job.checkpoint.notes_progress.total} 段`}</span><small>已用 {timeLabel(now - new Date(job.created_at).getTime())} · 关闭页面不会取消任务</small>{job.state === 'queued' && <button onClick={onCancel}>取消排队</button>}</div>
 }

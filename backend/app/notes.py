@@ -1,3 +1,4 @@
+import hashlib
 import json
 import math
 
@@ -18,7 +19,8 @@ kind 必须是上述四个枚举之一。不要自行生成时间码。"""
 API_PROMPT = (
     PROMPT
     + """
-使用简体中文。结合整份转录的上下文，按知识主题组织章节，不按片段顺序逐句摘抄。
+使用简体中文。结合本次片段的上下文，按知识主题组织章节，不按片段顺序逐句摘抄。
+长课程会按顺序分块，边界可能有重叠；只整理当前提供的资料，章节标题应简洁、稳定。
 合并重复与分散的解释，去掉语气词、无意义停顿和重复口头表达。
 每条笔记应表达一个完整知识点，保留必要的条件、因果关系与具体例子。
 根据上下文仍无法确定的术语或含义，标记为 uncertain 并说明待核对，不得猜测补全。
@@ -31,12 +33,113 @@ class NotesError(ValueError):
     pass
 
 
-def api_note(title, segments, revision):
+API_CHUNK_CHARS = 8000
+API_PROMPT_VERSION = "api-v2-chunks"
+
+
+def split_api_segments(segments):
+    chunks, chunk, size = [], [], 0
+    if not segments or sum(len(s["text"]) for s in segments) > get_settings().max_note_chars:
+        raise NotesError("API 整理需有有效转录，且单次最多处理 60000 个字符")
+    for segment in segments:
+        length = len(segment["text"])
+        if length > API_CHUNK_CHARS:
+            raise NotesError("存在超过 8000 字的单个转录片段，请先核对分段")
+        if chunk and size + length > API_CHUNK_CHARS:
+            chunks.append(chunk)
+            overlap = chunk[-2:]
+            while overlap and sum(len(s["text"]) for s in overlap) > min(
+                1000, API_CHUNK_CHARS - length
+            ):
+                overlap = overlap[1:]
+            chunk = list(overlap)
+            size = sum(len(s["text"]) for s in chunk)
+        chunk.append(segment)
+        size += length
+    if chunk:
+        chunks.append(chunk)
+    if len(chunks) > 16:
+        raise NotesError("转录分块超过 16 个，请拆分录音")
+    return chunks
+
+
+def merge_api_chunks(contents, segments):
+    if len(contents) == 1:
+        return contents[0]
+    sections, headings, entries = [], {}, {}
+    for content in contents:
+        for section in content["sections"]:
+            heading = " ".join(section["heading"].split()).casefold()
+            if heading not in headings:
+                target = {"heading": section["heading"], "items": []}
+                headings[heading] = target
+                sections.append(target)
+            for item in section["items"]:
+                key = (heading, item["kind"], " ".join(item["text"].split()).casefold())
+                if key not in entries:
+                    entries[key] = {**item, "source_segment_ids": list(item["source_segment_ids"])}
+                    headings[heading]["items"].append(entries[key])
+                else:
+                    refs = entries[key]["source_segment_ids"]
+                    refs.extend(
+                        source for source in item["source_segment_ids"] if source not in refs
+                    )
+    try:
+        return validate_note({"title": contents[0]["title"], "sections": sections}, segments)
+    except ValueError:
+        raise NotesError("合并后的笔记超出结构限制，请拆分课程后整理") from None
+
+
+def api_note(title, segments, revision, checkpoint=None, on_checkpoint=None):
     config = load_api_config()
     if not config.configured or config.revision != revision:
         raise NotesError("AI 接口设置已变更，请重新核对并发起整理")
-    if not segments or sum(len(s["text"]) for s in segments) > get_settings().max_note_chars:
-        raise NotesError("API 整理需有有效转录，且单次最多处理 60000 个字符")
+    chunks = split_api_segments(segments)
+    plan = hashlib.sha256(
+        json.dumps(
+            {
+                "prompt_version": API_PROMPT_VERSION,
+                "revision": revision,
+                "chunks": chunks,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+    checkpoint = checkpoint if checkpoint is not None else {}
+    completed = (
+        list(checkpoint.get("notes_chunks", [])) if checkpoint.get("notes_plan") == plan else []
+    )
+    if len(completed) > len(chunks):
+        raise NotesError("笔记检查点无效，请重新发起整理")
+    for index, content in enumerate(completed):
+        try:
+            validate_note(content, chunks[index])
+        except ValueError:
+            raise NotesError("笔记检查点引用无效，请重新发起整理") from None
+
+    def save_progress():
+        checkpoint.update(
+            {
+                "notes_plan": plan,
+                "notes_chunks": completed,
+                "notes_progress": {"completed": len(completed), "total": len(chunks)},
+            }
+        )
+        if on_checkpoint:
+            on_checkpoint(checkpoint)
+
+    save_progress()
+    for chunk in chunks[len(completed) :]:
+        # Recheck between calls so a queued/running job never switches destinations.
+        if load_api_config().revision != revision:
+            raise NotesError("AI 接口设置已变更，请重新核对并发起整理")
+        completed.append(call_api_chunk(config, title, chunk))
+        save_progress()
+    return merge_api_chunks(completed, segments), config.model
+
+
+def call_api_chunk(config, title, segments):
     payload = {"title": title, "segments": [{"id": s["id"], "text": s["text"]} for s in segments]}
     try:
         with httpx.Client(timeout=httpx.Timeout(180, connect=15), follow_redirects=False) as client:
@@ -63,9 +166,9 @@ def api_note(title, segments, revision):
         if choice.get("finish_reason") != "stop":
             raise ValueError("未完成的输出")
         content = validate_note(json.loads(choice["message"]["content"]), segments)
-    except (ValueError, TypeError, KeyError, IndexError):
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError):
         raise NotesError("AI 输出结构或来源引用无效，未保存笔记；可检查模型后手动重试") from None
-    return content, config.model
+    return content
 
 
 def extractive_note(title, segments):

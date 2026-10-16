@@ -11,7 +11,7 @@ from . import asr
 from .config import get_settings
 from .db import Job, Lecture, Note, Transcript, Usage, new_id, now, session
 from .media import media_dir, normalize
-from .notes import NotesError, api_note, extractive_note, qwen_note
+from .notes import API_PROMPT_VERSION, NotesError, api_note, extractive_note, qwen_note
 
 QUEUE = "classecho"
 
@@ -219,7 +219,11 @@ def execute_job(job_id):
                 note_model = "local-extractive-v1"
             elif parameters["provider"] == "api":
                 content, note_model = api_note(
-                    lecture.title, segments, parameters.get("api_revision", "")
+                    lecture.title,
+                    segments,
+                    parameters.get("api_revision", ""),
+                    checkpoint,
+                    lambda saved: stage(job_id, "draft", saved),
                 )
             elif parameters["provider"] == "qwen":
                 content = qwen_note(job_id, lecture.title, segments)
@@ -234,6 +238,7 @@ def execute_job(job_id):
                     transcript_id=parameters["transcript_id"],
                     provider=parameters["provider"],
                     model=note_model,
+                    prompt_version=API_PROMPT_VERSION if parameters["provider"] == "api" else "v1",
                     content=content,
                 )
                 db.add(note)
