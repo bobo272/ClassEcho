@@ -5,10 +5,14 @@ import type { Course, Detail, Job, Lecture, Note, Segment, Settings, Transcript 
 import TranscriptPane from './TranscriptPane'
 import APISettings from './APISettings'
 import NoteContent from './NoteContent'
+import { readWorkspace, saveWorkspace } from './workspace'
 
 const stageNames: Record<string, string> = { queued: '等待处理', normalize: '规范化音频', download: '检查或下载模型（首次较慢）', transcribe: '本地转录中', draft: '整理笔记中', validate: '检查来源引用', complete: '已完成' }
 
 export default function App() {
+  const [savedWorkspace] = useState(readWorkspace)
+  const restorePending = useRef(true)
+  const loadedCourse = useRef('')
   const [courses, setCourses] = useState<Course[]>([])
   const [courseId, setCourseId] = useState('')
   const [lectures, setLectures] = useState<Lecture[]>([])
@@ -53,8 +57,10 @@ export default function App() {
 
   const refreshCourses = useCallback(async () => {
     const list = await api<Course[]>('/courses')
-    setCourses(list); setCourseId(previous => previous || list[0]?.id || '')
-  }, [])
+    setCourses(list)
+    setCourseId(previous => list.some(course => course.id === previous) ? previous : list.find(course => course.id === savedWorkspace.courseId)?.id ?? list[0]?.id ?? '')
+    if (!list.length) saveWorkspace({ courseId: '', lectureId: '' })
+  }, [savedWorkspace.courseId])
   const refreshDetail = useCallback(async () => {
     if (lectureId) {
       const result = await api<Detail>(`/lectures/${lectureId}`)
@@ -66,9 +72,20 @@ export default function App() {
   useEffect(() => {
     let active = true
     setLectures([]); setLectureId(''); setDetail(null)
-    if (courseId) api<Lecture[]>(`/courses/${courseId}/lectures`).then(list => { if (active) setLectures(list) }).catch(error => { if (active) setError(error.message) })
+    if (courseId) api<Lecture[]>(`/courses/${courseId}/lectures`).then(list => {
+      if (!active) return
+      loadedCourse.current = courseId
+      setLectures(list)
+      if (restorePending.current) {
+        restorePending.current = false
+        if (savedWorkspace.courseId === courseId && list.some(lecture => lecture.id === savedWorkspace.lectureId)) setLectureId(savedWorkspace.lectureId)
+      }
+    }).catch(error => { if (active) setError(error.message) })
     return () => { active = false }
-  }, [courseId])
+  }, [courseId, savedWorkspace])
+  useEffect(() => {
+    if (courseId && loadedCourse.current === courseId) saveWorkspace({ courseId, lectureId })
+  }, [courseId, lectureId, lectures])
   useEffect(() => {
     let active = true
     setDetail(null); setDirty({}); setNoteDirty(false); setNoteEdits({}); setNoteId(''); setPosition(0); setSource(null); setShowNoteSource(false)
