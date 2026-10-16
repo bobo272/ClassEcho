@@ -82,7 +82,13 @@ def source(name):
 def run(command, cwd, name):
     log = BUILD / f"{name}.log"
     with log.open("ab") as output:
-        result = subprocess.run(command, cwd=cwd, stdout=output, stderr=subprocess.STDOUT)
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            stdout=output,
+            stderr=subprocess.STDOUT,
+            env={**os.environ, "SOURCE_DATE_EPOCH": "0"},
+        )
     if result.returncode:
         raise RuntimeError(f"编译失败，请查看 {log.relative_to(ROOT)}")
 
@@ -93,7 +99,13 @@ def main():
     tools = BUILD / "tools/bin"
     tools.mkdir(parents=True, exist_ok=True)
     stamp = BUILD / "tools/build.json"
-    spec = {"sources": SOURCES, "ffmpeg_flags": FFMPEG_FLAGS, "redis_flags": REDIS_FLAGS}
+    spec = {
+        "sources": SOURCES,
+        "ffmpeg_flags": FFMPEG_FLAGS,
+        "redis_flags": REDIS_FLAGS,
+        "source_date_epoch": "0",
+        "strip_flags": ["-S", "-x"],
+    }
     expected = json.loads(json.dumps(spec))
     if (
         stamp.exists()
@@ -110,9 +122,12 @@ def main():
     for name in ("ffmpeg", "ffprobe"):
         shutil.copy2(ffmpeg / name, tools / name)
     print("正在构建独立 Redis core…", flush=True)
+    # Force regeneration with SOURCE_DATE_EPOCH; the default header embeds hostname.
+    (redis / "src/release.h").unlink(missing_ok=True)
     run(["make", "-C", "src", "-j", threads, "redis-server", *REDIS_FLAGS], redis, "redis")
     shutil.copy2(redis / "src/redis-server", tools / "redis-server")
     for path in tools.iterdir():
+        run(["strip", "-S", "-x", str(path)], ROOT, path.name)
         dependencies = subprocess.check_output(["otool", "-L", str(path)], text=True).splitlines()[
             1:
         ]

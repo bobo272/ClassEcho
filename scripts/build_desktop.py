@@ -72,6 +72,25 @@ def native_files(root):
                 yield path
 
 
+def audit_builder_metadata(root, needles=None):
+    if needles is None:
+        needles = [str(Path.home()).encode()]
+        hostname = platform.node()
+        if len(hostname) >= 10 and hostname not in {"localhost.localdomain"}:
+            needles.append(hostname.encode())
+    overlap = max(map(len, needles), default=1) - 1
+    for path in root.rglob("*"):
+        if not path.is_file() or path.is_symlink():
+            continue
+        with path.open("rb") as source:
+            tail = b""
+            while block := source.read(1024 * 1024):
+                content = tail + block
+                if any(needle in content for needle in needles):
+                    raise RuntimeError(f"安装包包含构建机路径或机器名：{path.relative_to(root)}")
+                tail = content[-overlap:] if overlap else b""
+
+
 def relocate_library_ids(root):
     # Some upstream wheels carry build-machine install IDs even when their consumers
     # already use relative links. Change only those IDs in the copied bundle.
@@ -296,6 +315,7 @@ def build_application(application):
     run([icon, iconset])
     run(["iconutil", "-c", "icns", iconset, "-o", resources / "ClassEcho.icns"])
     binaries, minimum = audit_bundle(application)
+    audit_builder_metadata(application)
     info = {
         "CFBundleIdentifier": "io.github.bobo272.ClassEcho",
         "CFBundleExecutable": "ClassEcho",

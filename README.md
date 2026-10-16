@@ -81,7 +81,7 @@ npm --prefix frontend run build
 
 请在仓库根目录使用 `python -m pytest` 启动测试，确保 `backend` 包能够被导入。
 
-当前本机后端 74 项测试、前端 34 项前端测试与生产构建已通过。CI 配置见 `.github/workflows/ci.yml`，远端是否通过以 GitHub Actions 实际结果为准。测试使用临时音频和模拟模型响应，不代表真实识别质量通过。
+当前本机后端 76 项测试、前端 34 项前端测试与生产构建已通过。CI 配置见 `.github/workflows/ci.yml`，远端是否通过以 GitHub Actions 实际结果为准。测试使用临时音频和模拟模型响应，不代表真实识别质量通过。
 
 开发前后端时，可分别运行 `uv run uvicorn backend.app.main:app --host 127.0.0.1 --port 8765` 与 `npm --prefix frontend run dev`；转录和笔记任务还需要本机 Redis 和 `uv run python -m backend.app.worker`。统一启动器与手动 API 不应同时占用 8765 端口。
 
@@ -137,3 +137,5 @@ npm --prefix frontend run build
 桌面运行入口位于 `desktop/runtime.py`：使用独立的 `~/Library/Application Support/ClassEcho/data`，选择本机端口、启动生产页面及 API/worker/Redis，通过实例握手确认服务归属；退出时清理自己创建的进程。不会自动迁移开发版 `data/` 或接管开发服务。安装包不包含个人录音、转录、数据库、接口配置或模型权重。
 
 2026-10-16，本机安装产物通过深度签名验证、194 个原生文件依赖检查、搬移后的 Python/MLX/Torch/SciPy/OpenCC 加载，以及独立数据目录内的 API/Redis/SpawnWorker 本地摘录、示例音频 AIFF 转码与拼接、媒体访问、Markdown/SRT/JSON 导出、退出清理；DMG 校验通过。示例使用自写文本与系统合成语音，不能代替真实课堂识别质量、硬件录音或另一台 Mac 的验收。
+
+镜像内原生窗口已实测启动、示例笔记显示、系统导入／导出对话框和 Cmd+Q 退出；退出后本次 API 端口关闭。工具构建清除调试／本地符号并固定 Redis 构建标识，安装包增加构建机路径与机器名的逐文件审计。

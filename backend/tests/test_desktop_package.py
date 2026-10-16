@@ -49,3 +49,17 @@ def test_bundle_rejects_symlink_to_machine_data(tmp_path):
     (tmp_path / "external").symlink_to(tmp_path.parent)
     with pytest.raises(RuntimeError, match="外部符号链接"):
         build_desktop.audit_bundle(tmp_path)
+
+
+def test_packaging_rejects_embedded_builder_metadata_across_read_boundaries(tmp_path):
+    import pytest
+
+    needle = b"/Users/private-builder"
+    (tmp_path / "tool").write_bytes(b"\0" * (1024 * 1024 - 4) + needle + b"\0")
+    with pytest.raises(RuntimeError, match="构建机路径或机器名"):
+        build_desktop.audit_builder_metadata(tmp_path, [needle])
+
+
+def test_public_relative_runtime_metadata_is_allowed(tmp_path):
+    (tmp_path / "config.py").write_text('root = "/ClassEcho/Python"')
+    build_desktop.audit_builder_metadata(tmp_path, [b"/Users/private-builder"])
