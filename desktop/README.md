@@ -22,7 +22,7 @@ Redis 默认构建标识包含机器名，工具构建使用固定 `SOURCE_DATE_
 
 ## 数据与运行
 
-默认数据目录是 `~/Library/Application Support/ClassEcho/data`；不会自动迁移开发版仓库内的数据。模型需要在桌面版设置中单独下载。测试时可通过 `CLASSECHO_DESKTOP_DATA_DIR` 指定隔离目录，该环境变量不应指向已有开发数据。
+默认数据目录是 `~/Library/Application Support/ClassEcho/data`；不会自动迁移开发版仓库内的数据。模型在首次开始本地转录时自动下载，设置页只显示状态；small 模型准备完成后才能进行麦克风实时预览。测试时可通过 `CLASSECHO_DESKTOP_DATA_DIR` 指定隔离目录，该环境变量不应指向已有开发数据。
 
 日志位于数据目录的 `logs/`，应用菜单提供入口。安装不需要 Node、Homebrew、uv 或系统 Python。应用不自更新，也不提供 Intel、Windows 或 Linux 安装包。
 
