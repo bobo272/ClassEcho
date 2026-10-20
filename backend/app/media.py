@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .config import get_settings
 
-EXTENSIONS = {".mp3", ".m4a", ".wav", ".mp4"}
+EXTENSIONS = {".mp3", ".m4a", ".wav", ".mp4", ".webm"}
 
 
 def media_dir(lecture_id: str):
@@ -59,6 +59,8 @@ def normalize(source: Path, target: Path):
                 "-map",
                 "0:a:0",
                 "-vn",
+                "-t",
+                str(get_settings().max_duration + 1),
                 "-ac",
                 "1",
                 "-ar",

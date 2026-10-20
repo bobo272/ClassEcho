@@ -24,7 +24,7 @@ jobs:
       - run: uv sync --locked
       - run: uv run --locked ruff check backend scripts
       - run: uv run --locked ruff format --check backend scripts
-      - run: uv run --locked pytest backend/tests -q
+      - run: uv run --locked python -m pytest backend/tests -q
   frontend:
     runs-on: ubuntu-latest
     defaults:

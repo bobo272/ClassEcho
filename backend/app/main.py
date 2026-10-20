@@ -1,4 +1,5 @@
 import hashlib
+import os
 import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -16,9 +17,11 @@ from . import asr, jobs
 from .config import ROOT, get_settings
 from .db import Bookmark, Course, Job, Lecture, Note, Transcript, Usage, new_id, row_dict, session
 from .exports import backup_json, note_markdown, transcript_srt
-from .media import EXTENSIONS, media_dir, probe
+from .live_asr import router as live_router
+from .media import EXTENSIONS, media_dir, normalize, probe
 from .migrate import migrate
 from .notes import budget_summary
+from .notes_api import APIInput, load_api_config, save_api_config
 from .schemas import (
     BookmarkInput,
     CourseInput,
@@ -37,6 +40,7 @@ async def lifespan(app):
 
 app = FastAPI(title="ClassEcho", version="0.1.0", lifespan=lifespan)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
+app.include_router(live_router)
 
 
 @app.middleware("http")
@@ -48,7 +52,7 @@ async def local_origin(request: Request, call_next):
             if (
                 parsed.scheme != "http"
                 or parsed.hostname not in ("localhost", "127.0.0.1")
-                or parsed.port not in (5173, 8765)
+                or parsed.port not in (5173, get_settings().api_port)
             ):
                 return JSONResponse({"detail": "拒绝来自其他网站的本机写入请求"}, status_code=403)
     response = await call_next(request)
@@ -76,7 +80,10 @@ def health():
         available = True
     except Exception:
         available = False
-    return {"status": "ok", "redis": available}
+    result = {"status": "ok", "redis": available}
+    if instance := os.getenv("CLASSECHO_INSTANCE_ID"):
+        result["instance_id"] = instance
+    return result
 
 
 @app.get("/api/settings")
@@ -89,6 +96,7 @@ def settings_info():
             "prices_configured": settings.input_price is not None
             and settings.output_price is not None,
             "budget": budget_summary(db),
+            "notes_api": load_api_config().public(),
             "models": [
                 {"name": name, **value, "ready": asr.model_ready(name)}
                 for name, value in asr.MODELS.items()
@@ -96,6 +104,18 @@ def settings_info():
             "max_file_mb": 500,
             "max_minutes": 90,
         }
+
+
+@app.put("/api/settings/notes-api")
+async def update_notes_api(request: Request):
+    try:
+        body = APIInput.model_validate(await request.json())
+    except ValueError:
+        # Validation errors may contain input values, including a supplied secret.
+        raise HTTPException(
+            400, "请检查接口 URL、模型和密钥格式；URL 不可含凭据或查询参数"
+        ) from None
+    return save_api_config(body).public()
 
 
 @app.get("/api/usage")
@@ -156,7 +176,7 @@ async def import_lecture(course_id: str, file: Annotated[UploadFile, File()]):
     filename = Path(file.filename or "录音").name
     suffix = Path(filename).suffix.lower()
     if suffix not in EXTENSIONS:
-        raise HTTPException(400, "仅支持 MP3、M4A、WAV 和 MP4")
+        raise HTTPException(400, "仅支持 MP3、M4A、WAV、MP4 和 WebM")
     identifier = new_id()
     directory = media_dir(identifier)
     directory.mkdir(parents=True)
@@ -170,7 +190,11 @@ async def import_lecture(course_id: str, file: Annotated[UploadFile, File()]):
                     raise HTTPException(413, "文件超过 500MB")
                 digest.update(chunk)
                 output.write(chunk)
-        duration = await run_in_threadpool(probe, target)
+        # MediaRecorder WebM often has no duration header; decode before measuring it.
+        if suffix == ".webm":
+            duration = await run_in_threadpool(normalize, target, directory / "normalized.wav")
+        else:
+            duration = await run_in_threadpool(probe, target)
         with session() as db:
             require(db, Course, course_id)
             lecture = Lecture(
@@ -250,8 +274,20 @@ def lecture_detail(lecture_id: str):
 def start_transcribe(lecture_id: str, body: TranscribeInput):
     with session() as db:
         require(db, Lecture, lecture_id)
+    if body.after_transcribe and body.after_transcribe.provider == "api":
+        config = load_api_config()
+        if not config.configured:
+            raise HTTPException(400, "请先在设置中填写 AI 接口 URL、模型和密钥")
+        if (
+            not body.after_transcribe.consent
+            or body.after_transcribe.api_revision != config.revision
+        ):
+            raise HTTPException(409, "请核对当前 AI 接口设置，确认在录音结束后发送转录文本")
     identifier = jobs.create_job(
-        lecture_id, "transcribe", body.model_dump(exclude={"force"}), force=body.force
+        lecture_id,
+        "transcribe",
+        body.model_dump(exclude={"force"}, exclude_none=True),
+        force=body.force,
     )
     with session() as db:
         return row_dict(require(db, Job, identifier))
@@ -306,6 +342,12 @@ def start_notes(lecture_id: str, body: NoteInput):
             raise HTTPException(400, "转录不属于当前录音")
         if body.provider == "qwen" and not body.consent:
             raise HTTPException(400, "请先确认将此转录版本发送给云模型")
+        if body.provider == "api":
+            config = load_api_config()
+            if not config.configured:
+                raise HTTPException(400, "请先在设置中填写 AI 接口 URL、模型和密钥")
+            if not body.consent or body.api_revision != config.revision:
+                raise HTTPException(409, "请核对当前 AI 接口设置，确认向该接口发送转录文本")
     identifier = jobs.create_job(
         lecture_id, "notes", body.model_dump(exclude={"force"}), force=body.force
     )
@@ -332,7 +374,25 @@ def edit_note(note_id: str, body: NoteEdit):
         note = require(db, Note, note_id)
         if note.edit_version != body.edit_version:
             raise HTTPException(409, "笔记已在其他页面修改，请刷新后重试")
-        note.user_markdown = body.markdown
+        if body.markdown is None and not body.text_edits:
+            raise HTTPException(400, "没有需要保存的笔记修改")
+        if body.text_edits:
+            originals = {
+                f"{section_index}.{item_index}": item["text"]
+                for section_index, section in enumerate(note.content["sections"])
+                for item_index, item in enumerate(section["items"])
+            }
+            if any(key not in originals for key in body.text_edits):
+                raise HTTPException(400, "修改包含不存在的笔记条目")
+            edits = dict(note.text_edits)
+            for key, value in body.text_edits.items():
+                if value is None or value == originals[key]:
+                    edits.pop(key, None)
+                else:
+                    edits[key] = value
+            note.text_edits = edits
+        if body.markdown is not None:
+            note.user_markdown = body.markdown
         note.edit_version += 1
         db.commit()
         return row_dict(note)

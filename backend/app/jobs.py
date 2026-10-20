@@ -11,7 +11,7 @@ from . import asr
 from .config import get_settings
 from .db import Job, Lecture, Note, Transcript, Usage, new_id, now, session
 from .media import media_dir, normalize
-from .notes import NotesError, extractive_note, qwen_note
+from .notes import API_PROMPT_VERSION, NotesError, api_note, extractive_note, qwen_note
 
 QUEUE = "classecho"
 
@@ -187,6 +187,7 @@ def execute_job(job_id):
                     parameters["model"],
                     parameters.get("initial_prompt", ""),
                 )
+                followup_id = None
                 with session() as db:
                     transcript = Transcript(
                         id=new_id(),
@@ -206,7 +207,22 @@ def execute_job(job_id):
                         transcript.id,
                         now(),
                     )
+                    if options := parameters.get("after_transcribe"):
+                        # Publish the transcript and the next durable task atomically:
+                        # a browser refresh can never observe a completed chain with
+                        # no follow-up task. Never send audio to the notes provider.
+                        followup_id = new_id()
+                        db.add(
+                            Job(
+                                id=followup_id,
+                                lecture_id=lecture.id,
+                                kind="notes",
+                                parameters={**options, "transcript_id": transcript.id},
+                            )
+                        )
                     db.commit()
+                if followup_id:
+                    dispatch(followup_id)
         else:
             with session() as db:
                 transcript = db.get(Transcript, parameters["transcript_id"])
@@ -214,11 +230,22 @@ def execute_job(job_id):
                     raise ValueError("来源转录版本不存在")
                 segments = transcript.segments
             stage(job_id, "draft")
-            content = (
-                extractive_note(lecture.title, segments)
-                if parameters["provider"] == "extractive"
-                else qwen_note(job_id, lecture.title, segments)
-            )
+            if parameters["provider"] == "extractive":
+                content = extractive_note(lecture.title, segments)
+                note_model = "local-extractive-v1"
+            elif parameters["provider"] == "api":
+                content, note_model = api_note(
+                    lecture.title,
+                    segments,
+                    parameters.get("api_revision", ""),
+                    checkpoint,
+                    lambda saved: stage(job_id, "draft", saved),
+                )
+            elif parameters["provider"] == "qwen":
+                content = qwen_note(job_id, lecture.title, segments)
+                note_model = get_settings().qwen_model
+            else:
+                raise NotesError("未知笔记方式")
             stage(job_id, "validate")
             with session() as db:
                 note = Note(
@@ -226,9 +253,8 @@ def execute_job(job_id):
                     lecture_id=lecture.id,
                     transcript_id=parameters["transcript_id"],
                     provider=parameters["provider"],
-                    model="local-extractive-v1"
-                    if parameters["provider"] == "extractive"
-                    else get_settings().qwen_model,
+                    model=note_model,
+                    prompt_version=API_PROMPT_VERSION if parameters["provider"] == "api" else "v1",
                     content=content,
                 )
                 db.add(note)

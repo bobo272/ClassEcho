@@ -2,7 +2,10 @@ import json
 import os
 import resource
 import time
+from functools import lru_cache
 from pathlib import Path
+
+from opencc import OpenCC
 
 from .config import get_settings
 from .schemas import validate_segments
@@ -52,6 +55,33 @@ def download_model(name):
     return directory
 
 
+@lru_cache(maxsize=1)
+def chinese_converter():
+    return OpenCC("t2s.json")
+
+
+def build_segments(raw_segments, duration):
+    segments = []
+    for raw in raw_segments:
+        text = raw["text"].strip()
+        start_ms = max(0, round(raw["start"] * 1000))
+        end_ms = min(round(duration * 1000), round(raw["end"] * 1000))
+        if text and end_ms > start_ms:
+            segments.append(
+                {
+                    "id": f"segment_{len(segments) + 1:05d}",
+                    "start_ms": start_ms,
+                    "end_ms": end_ms,
+                    "raw_text": text,
+                    "text": chinese_converter().convert(text),
+                }
+            )
+    if not segments:
+        raise ValueError("未识别出有效语音，请确认录音音量与内容")
+    validate_segments(segments, duration)
+    return segments
+
+
 def transcribe(path: Path, duration, model_name, initial_prompt=""):
     import mlx.core as mx
     import mlx_whisper
@@ -69,28 +99,12 @@ def transcribe(path: Path, duration, model_name, initial_prompt=""):
         temperature=0.0,
         condition_on_previous_text=False,
     )
-    segments = []
-    for raw in result["segments"]:
-        text = raw["text"].strip()
-        start_ms = max(0, round(raw["start"] * 1000))
-        end_ms = min(round(duration * 1000), round(raw["end"] * 1000))
-        if text and end_ms > start_ms:
-            segments.append(
-                {
-                    "id": f"segment_{len(segments) + 1:05d}",
-                    "start_ms": start_ms,
-                    "end_ms": end_ms,
-                    "raw_text": text,
-                    "text": text,
-                }
-            )
-    if not segments:
-        raise ValueError("未识别出有效语音，请确认录音音量与内容")
-    validate_segments(segments, duration)
+    segments = build_segments(result["segments"], duration)
     elapsed = time.perf_counter() - start
     return segments, {
         "elapsed_seconds": round(elapsed, 3),
         "rtf": round(elapsed / duration, 4),
         "process_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
         "mlx_peak_bytes": mx.get_peak_memory(),
+        "text_normalization": "opencc:t2s",
     }

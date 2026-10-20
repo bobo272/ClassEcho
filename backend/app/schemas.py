@@ -63,16 +63,24 @@ class TranscriptEdit(StrictModel):
         return value
 
 
+class AfterTranscription(StrictModel):
+    provider: Literal["extractive", "api"]
+    consent: bool = False
+    api_revision: str = Field(default="", max_length=80)
+
+
 class TranscribeInput(StrictModel):
     model: Literal["small", "turbo"] = "small"
     initial_prompt: str = Field(default="", max_length=2000)
     force: bool = False
+    after_transcribe: AfterTranscription | None = None
 
 
 class NoteInput(StrictModel):
     transcript_id: str
-    provider: Literal["extractive", "qwen"] = "extractive"
+    provider: Literal["extractive", "qwen", "api"] = "extractive"
     consent: bool = False
+    api_revision: str = Field(default="", max_length=80)
     force: bool = False
 
 
@@ -103,8 +111,22 @@ def validate_note(content, segments):
 
 
 class NoteEdit(StrictModel):
-    markdown: str = Field(max_length=300000)
+    markdown: str | None = Field(default=None, max_length=300000)
+    text_edits: dict[str, str | None] | None = Field(default=None, max_length=10000)
     edit_version: int = Field(ge=0)
+
+    @field_validator("text_edits")
+    @classmethod
+    def valid_edits(cls, value):
+        if value is not None and (
+            any(
+                text is not None and (not text.strip() or len(text) > 5000)
+                for text in value.values()
+            )
+            or sum(len(text or "") for text in value.values()) > 300000
+        ):
+            raise ValueError("笔记正文不能为空，单条最多 5000 字，总修改最多 300000 字")
+        return value
 
 
 class BookmarkInput(StrictModel):
