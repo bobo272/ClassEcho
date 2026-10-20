@@ -2,7 +2,17 @@
 
 中文课堂 AI 笔记工具：把课程录音整理成能回听核对、能编辑导出的课程笔记。
 
-> 当前为本地开发预览版。课程工作区、转录修订、后台任务、引用回听和导出已实现；笔记流程先用本地逐段摘录验证。真实录音质量评测和用户自选 API 的联调尚未完成。
+> 当前为桌面预览版。课程工作区、转录修订、后台任务、引用回听和导出已实现；笔记流程先用本地逐段摘录验证。跨设备安装、真实录音质量评测和用户自选 API 的联调尚未完成。
+
+## 下载桌面预览版
+
+[打开 GitHub Release 下载页](https://github.com/bobo272/ClassEcho/releases/tag/v0.1.0-preview.1) · [下载 macOS arm64 DMG](https://github.com/bobo272/ClassEcho/releases/download/v0.1.0-preview.1/ClassEcho-0.1.0-preview.1-macos-arm64.dmg)
+
+适用于 **M 系列 Mac、macOS 26.2 及以上**。下载 DMG 后将应用拖入“应用程序”；无需安装 Homebrew、Python、Node 或 Redis。首次开始本地转录时自动下载模型，small 就绪后可使用麦克风实时预览。Release 附有 SHA256、构建清单和安装说明；Source code ZIP/TAR 为源码，不是安装包。
+
+预览包仅使用本地 ad-hoc 签名，尚未进行 Apple 公证，也未在第二台 Mac 验收。若系统拦截，请由设备所有者核对来源并按 [Apple 官方指引](https://support.apple.com/zh-cn/102445) 自行确认。当前没有 Intel Mac、Windows 或 Linux 安装包。
+
+后续任务和验收标准见 [项目路线图](docs/ROADMAP.md)。反馈问题请到 [Issues](https://github.com/bobo272/ClassEcho/issues)，不要上传真实课堂录音、转录、密钥、数据库或未脱敏日志。
 
 ## 使用流程
 
