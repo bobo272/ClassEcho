@@ -81,6 +81,8 @@ uv run --locked python scripts/download_model.py small --http-chunks
 
 ## 开发与验证
 
+后端接口说明见 [API 文档](docs/API.md)，包含全部业务路由、参数与响应结构、错误码、异步任务调用流程及答辩要点。服务启动后也可访问 `/docs` 查看 Swagger UI。
+
 ```bash
 uv run --locked python -m pytest backend/tests -q
 uv run --locked ruff check backend scripts
